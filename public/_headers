@@ -1,0 +1,6 @@
+# Netlify / Cloudflare Pages: cross-origin isolation lets the on-device
+# voice engine use multiple CPU cores (much faster narration on phones).
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Resource-Policy: same-origin
