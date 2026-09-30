@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { deleteBook, listBooks, newId, saveBook, type BookMeta } from "../lib/db";
-import { LockIcon, MoreIcon, OfflineIcon, PlusIcon, WaveIcon } from "./Icons";
+import { LockIcon, MoreIcon, OfflineIcon, PlayIcon, PlusIcon, WaveIcon } from "./Icons";
 import { WORDS_PER_MINUTE, formatDuration } from "../lib/format";
 
 interface LibraryProps {
@@ -93,7 +93,9 @@ export function Library({ onOpen }: LibraryProps) {
           </span>
           <h1>Flybook</h1>
         </div>
-        <p className="muted">Turn any PDF into an audiobook — right on your phone.</p>
+        <p>
+          Turn any PDF into an <span className="grad-text">audiobook</span> — right on your phone.
+        </p>
       </header>
 
       <label className="add-btn">
@@ -123,6 +125,39 @@ export function Library({ onOpen }: LibraryProps) {
             {importing.total ? `Reading page ${importing.done} of ${importing.total}` : "Opening…"}
           </p>
         </div>
+      )}
+
+      {books && books.length > 0 && (() => {
+        const [latest] = books;
+        const progress = latest.segmentCount > 1 ? latest.position / (latest.segmentCount - 1) : 0;
+        return (
+          <>
+            <p className="section-label">Continue listening</p>
+            <button className="hero" onClick={() => onOpen(latest.id)}>
+              {latest.cover ? (
+                <img className="cover" src={latest.cover} alt="" />
+              ) : (
+                <span className="cover placeholder">{latest.title.slice(0, 1)}</span>
+              )}
+              <span className="hero-info">
+                <span className="hero-title">{latest.title}</span>
+                <span className="muted small">
+                  {Math.round(progress * 100)}% · {formatDuration((latest.words * (1 - progress)) / WORDS_PER_MINUTE)} left
+                </span>
+                <span className="bar thin">
+                  <span className="bar-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
+                </span>
+              </span>
+              <span className="hero-play" aria-hidden>
+                <PlayIcon width={24} height={24} />
+              </span>
+            </button>
+          </>
+        );
+      })()}
+
+      {books && books.length > 0 && (
+        <p className="section-label">Your library · {books.length}</p>
       )}
 
       {books && books.length > 0 && (
