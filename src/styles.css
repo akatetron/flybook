@@ -1,30 +1,32 @@
-/* Flybook — "Midnight & Ember": deep midnight surfaces, a violet→coral
-   accent gradient, and a calm serif page for reading. Dark first; a soft
-   lavender light theme follows the system setting. */
+/* Flybook — "Forest & Gold": deep forest green, warm cream text and an
+   antique-gold accent, like an old library at night. A parchment light
+   theme follows the system setting. */
 
 :root {
-  --bg: #f5f4fb;
-  --bg-glow-1: rgba(122, 97, 255, 0.16);
-  --bg-glow-2: rgba(255, 128, 92, 0.12);
-  --surface: #ffffff;
-  --surface-2: #eeecf8;
-  --surface-3: #e3e0f3;
-  --page: #ffffff;
-  --text: #15162b;
-  --text-soft: #3a3c58;
-  --muted: #6c6f8b;
-  --line: rgba(21, 22, 43, 0.08);
-  --accent: #6a55f0;
-  --accent-2: #f2704e;
-  --accent-soft: rgba(106, 85, 240, 0.12);
-  --on-accent: #ffffff;
-  --grad: linear-gradient(135deg, #7b61ff 0%, #b45cf0 48%, #ff7a59 100%);
-  --hl: rgba(123, 97, 255, 0.16);
-  --hl-edge: rgba(123, 97, 255, 0.55);
-  --danger: #d1374b;
-  --shadow: 0 12px 32px rgba(40, 30, 110, 0.12);
-  --shadow-lg: 0 24px 60px rgba(40, 30, 110, 0.18);
-  --glow: 0 10px 30px rgba(123, 97, 255, 0.35);
+  --bg: #f4efe2;
+  --bg-glow-1: rgba(196, 150, 58, 0.16);
+  --bg-glow-2: rgba(46, 94, 66, 0.12);
+  --surface: #fbf8f0;
+  --surface-2: #ece5d2;
+  --surface-3: #ddd4bc;
+  --page: #fbf8f0;
+  --text: #16241b;
+  --text-soft: #34473a;
+  --muted: #6d7a6f;
+  --line: rgba(22, 36, 27, 0.1);
+  --accent: #9a6f1c;
+  --accent-2: #2e5e42;
+  --accent-soft: rgba(176, 128, 36, 0.14);
+  --on-accent: #16241b;
+  --grad: linear-gradient(135deg, #e6c26a 0%, #d4a849 50%, #b8872e 100%);
+  --track: linear-gradient(90deg, #e6c26a, #b8872e);
+  --hl: rgba(212, 168, 73, 0.26);
+  --hl-edge: rgba(184, 135, 46, 0.6);
+  --danger: #b3261e;
+  --scrim: rgba(22, 36, 27, 0.45);
+  --shadow: 0 12px 32px rgba(40, 50, 30, 0.12);
+  --shadow-lg: 0 24px 60px rgba(40, 50, 30, 0.18);
+  --glow: 0 10px 28px rgba(196, 150, 58, 0.35);
   --serif: "Literata", "Iowan Old Style", Georgia, serif;
   --display: "Fraunces", "Iowan Old Style", Georgia, serif;
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -34,27 +36,28 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0a0c18;
-    --bg-glow-1: rgba(123, 97, 255, 0.22);
-    --bg-glow-2: rgba(255, 122, 89, 0.12);
-    --surface: #141830;
-    --surface-2: #1d2240;
-    --surface-3: #282e52;
-    --page: #0f1224;
-    --text: #eef0fb;
-    --text-soft: #c9cce3;
-    --muted: #9095b5;
-    --line: rgba(255, 255, 255, 0.07);
-    --accent: #9b8cff;
-    --accent-2: #ff8a65;
-    --accent-soft: rgba(155, 140, 255, 0.14);
-    --on-accent: #ffffff;
-    --hl: rgba(155, 140, 255, 0.2);
-    --hl-edge: rgba(155, 140, 255, 0.6);
-    --danger: #ff7a8a;
+    --bg: #0f1a14;
+    --bg-glow-1: rgba(212, 168, 73, 0.1);
+    --bg-glow-2: rgba(60, 120, 84, 0.16);
+    --surface: #17251d;
+    --surface-2: #1f3127;
+    --surface-3: #2a3f32;
+    --page: #121e17;
+    --text: #ede8da;
+    --text-soft: #cfc9b8;
+    --muted: #93a096;
+    --line: rgba(237, 232, 218, 0.08);
+    --accent: #d4a849;
+    --accent-2: #e6c26a;
+    --accent-soft: rgba(212, 168, 73, 0.14);
+    --on-accent: #14201a;
+    --hl: rgba(212, 168, 73, 0.2);
+    --hl-edge: rgba(212, 168, 73, 0.55);
+    --danger: #ff8a7a;
+    --scrim: rgba(4, 8, 6, 0.6);
     --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
     --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
-    --glow: 0 10px 34px rgba(140, 110, 255, 0.45);
+    --glow: 0 10px 30px rgba(212, 168, 73, 0.28);
     color-scheme: dark;
   }
 }
@@ -285,7 +288,7 @@ p {
   height: 42px;
   border-radius: 13px;
   background: var(--grad);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: var(--glow);
 }
 .lib-head > p {
@@ -294,7 +297,7 @@ p {
   max-width: 30ch;
 }
 .grad-text {
-  background: var(--grad);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -308,7 +311,7 @@ p {
   min-height: 60px;
   border-radius: 18px;
   background: var(--grad);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 700;
   font-size: 17px;
   letter-spacing: 0.01em;
@@ -402,7 +405,7 @@ p {
   display: grid;
   place-items: center;
   background: var(--grad);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: var(--glow);
 }
 .hero-play svg {
@@ -450,7 +453,7 @@ p {
   font-family: var(--display);
   font-size: 28px;
   font-weight: 700;
-  color: #fff;
+  color: var(--on-accent);
   background: var(--grad);
 }
 .book-info {
@@ -612,7 +615,7 @@ p {
   padding: 10px 18px;
   border-radius: 22px;
   background: var(--grad);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 14px;
   font-weight: 650;
   box-shadow: var(--glow);
@@ -645,14 +648,14 @@ p {
   height: 5px;
   border-radius: 3px;
   background:
-    linear-gradient(90deg, #7b61ff, #b45cf0 50%, #ff7a59) 0 0 / var(--pct) 100% no-repeat,
+    var(--track) 0 0 / var(--pct) 100% no-repeat,
     var(--surface-3);
 }
 .scrub input::-moz-range-track {
   height: 5px;
   border-radius: 3px;
   background:
-    linear-gradient(90deg, #7b61ff, #b45cf0 50%, #ff7a59) 0 0 / var(--pct) 100% no-repeat,
+    var(--track) 0 0 / var(--pct) 100% no-repeat,
     var(--surface-3);
 }
 .scrub input::-webkit-slider-thumb {
@@ -686,6 +689,10 @@ p {
   font-size: 13px;
   color: var(--accent);
   font-weight: 550;
+}
+.status.quiet {
+  color: var(--muted);
+  font-weight: 500;
 }
 .status.error {
   color: var(--danger);
@@ -729,7 +736,7 @@ p {
   display: grid;
   place-items: center;
   background: var(--grad);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: var(--glow);
   transition: transform 0.15s;
 }
@@ -759,7 +766,7 @@ p {
   position: fixed;
   inset: 0;
   z-index: 20;
-  background: rgba(6, 7, 18, 0.55);
+  background: var(--scrim);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   display: flex;
@@ -902,14 +909,15 @@ p {
   font-weight: 700;
   font-family: var(--display);
   font-size: 18px;
-  color: #fff;
-  background: linear-gradient(135deg, #5b6384, #3b4160);
+  color: #f4efe2;
+  background: linear-gradient(135deg, #5d6b61, #3b4a40);
 }
 .avatar.f {
-  background: linear-gradient(135deg, #ff7a59, #e0467c);
+  color: #16241b;
+  background: linear-gradient(135deg, #e6c26a, #b8872e);
 }
 .avatar.m {
-  background: linear-gradient(135deg, #7b61ff, #3a8dff);
+  background: linear-gradient(135deg, #3f7a57, #24493a);
 }
 .preview {
   background: var(--surface-2);
