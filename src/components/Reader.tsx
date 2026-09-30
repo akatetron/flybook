@@ -283,13 +283,24 @@ function ReaderView({
       </span>
     );
   } else if (state.buffering) {
-    status = <span className="status">Preparing audio…</span>;
+    status = (
+      <span className="status">
+        Preparing audio… {state.ahead > 0 ? `${Math.round(state.ahead)}s ready` : ""}
+      </span>
+    );
   } else if (state.finished) {
     status = <span className="status">The end. Tap play to listen again.</span>;
   } else if (state.sleep) {
     status = (
       <span className="status">
         {"until" in state.sleep ? <SleepCountdown until={state.sleep.until} /> : "Sleeping at end of chapter"}
+      </span>
+    );
+  } else if (settings.engine === "studio" && state.ahead >= 1) {
+    const secs = Math.round(state.ahead);
+    status = (
+      <span className="status quiet">
+        {secs >= 60 ? `${Math.floor(secs / 60)} min ${secs % 60}s` : `${secs}s`} of audio ready ahead
       </span>
     );
   }
