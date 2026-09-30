@@ -1,6 +1,7 @@
-// Plays a book sentence by sentence. With studio voices it generates a few
-// sentences ahead in the background so playback is continuous; with system
-// voices it hands each sentence to the phone's speech engine.
+// Plays a book sentence by sentence. With studio voices it keeps a few
+// minutes of audio prepared ahead in the background (also while paused) so
+// playback doesn't stop to buffer; with system voices it hands each sentence
+// to the phone's speech engine.
 import type { Chapter, Segment } from "../lib/text";
 import { speakable } from "../lib/text";
 import type { Engine } from "../lib/settings";
@@ -11,6 +12,8 @@ export interface NarratorState {
   index: number;
   playing: boolean;
   buffering: boolean;
+  /** Seconds of audio prepared ahead of the current position (studio voices). */
+  ahead: number;
   finished: boolean;
   error: string | null;
   sleep: { until: number } | { chapterEnd: true } | null;
@@ -29,8 +32,13 @@ export interface NarratorOptions {
   onPosition: (index: number) => void;
 }
 
-/** How many sentences to generate ahead of the one playing. */
-const LOOKAHEAD = 4;
+/** Keep generating until this much audio is ready ahead of the listener. */
+const AHEAD_SECONDS = 180;
+/** …but never more than this many sentences (bounds memory). */
+const MAX_AHEAD = 80;
+/** After running dry, wait for this cushion before resuming, so one short
+ *  pause replaces a stutter at every sentence. */
+const RESUME_CUSHION_SECONDS = 15;
 
 // A tiny silent WAV, played synchronously inside the first tap so iOS lets
 // the same <audio> element play later without another tap.
@@ -58,7 +66,7 @@ export class Narrator {
   constructor(opts: NarratorOptions) {
     this.opts = opts;
     const start = Math.min(Math.max(0, opts.start), Math.max(0, opts.segments.length - 1));
-    this.state = { index: start, playing: false, buffering: false, finished: false, error: null, sleep: null };
+    this.state = { index: start, playing: false, buffering: false, ahead: 0, finished: false, error: null, sleep: null };
     this.audio.preload = "auto";
     this.audio.addEventListener("ended", () => {
       if (this.state.playing) this.advance();
@@ -73,6 +81,9 @@ export class Narrator {
       }, 0);
     });
     this.setupMediaSession();
+    // Voices already on this device: start preparing audio right away, so
+    // pressing play is instant and there's a head start before listening.
+    if (opts.engine === "studio" && kokoro.wasDownloaded()) this.pump();
   }
 
   // ---------- subscription (for React's useSyncExternalStore) ----------
@@ -210,6 +221,13 @@ export class Narrator {
       this.pump();
       clip = await this.waitFor(index);
       if (token !== this.token) return;
+      // Ran dry: build a small cushion before resuming.
+      while (this.readyAhead(index).seconds < RESUME_CUSHION_SECONDS) {
+        const next = this.readyAhead(index).end;
+        if (next >= this.opts.segments.length || this.state.error) break;
+        await this.waitFor(next);
+        if (token !== this.token) return;
+      }
     }
     this.emit({ buffering: false });
     if (clip === null) {
@@ -280,18 +298,25 @@ export class Narrator {
     });
   }
 
-  /** Generates the next missing sentence in the look-ahead window. */
+  /** Seconds of contiguous prepared audio from `from`, and the first index not ready. */
+  private readyAhead(from: number): { seconds: number; end: number } {
+    let seconds = 0;
+    let i = from;
+    while (i < this.opts.segments.length && this.cache.has(i)) {
+      seconds += this.cache.get(i)?.seconds ?? 0;
+      i++;
+    }
+    return { seconds, end: i };
+  }
+
+  /** Generates the next missing sentence until enough audio is ready ahead. */
   private pump() {
     if (this.opts.engine !== "studio" || this.inflight !== null) return;
     const { index } = this.state;
-    const last = Math.min(this.opts.segments.length - 1, index + LOOKAHEAD);
-    let target = -1;
-    for (let i = index; i <= last; i++) {
-      if (!this.cache.has(i)) {
-        target = i;
-        break;
-      }
-    }
+    const { seconds, end } = this.readyAhead(index);
+    if (Math.abs(seconds - this.state.ahead) >= 1) this.emit({ ahead: seconds });
+    const enough = seconds >= AHEAD_SECONDS || end > index + MAX_AHEAD;
+    const target = !enough && end < this.opts.segments.length ? end : -1;
     this.evict();
     if (target === -1) return;
 
@@ -336,7 +361,7 @@ export class Narrator {
   private evict() {
     const { index } = this.state;
     for (const [i, clip] of this.cache) {
-      if (i < index - 2 || i > index + LOOKAHEAD + 6) {
+      if (i < index - 2 || i > index + MAX_AHEAD + 10) {
         if (clip && i !== this.loadedIndex) URL.revokeObjectURL(clip.url);
         this.cache.delete(i);
       }
