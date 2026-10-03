@@ -25,6 +25,8 @@ export interface NarratorState {
   slow: boolean;
   /** Audio is being generated right now (also while paused). */
   preparing: boolean;
+  /** Bumped whenever preparation progresses (for per-chapter progress displays). */
+  version: number;
   finished: boolean;
   error: string | null;
   sleep: { until: number } | { chapterEnd: true } | null;
@@ -66,9 +68,13 @@ export class Narrator {
   private voiceGen = 0;
   /** Playable audio in memory, by sentence index (null = sentence failed, skip it). */
   private cache = new Map<number, Clip | null>();
-  /** Seconds of each sentence saved on the device for the current voice. */
-  private saved = new Map<number, number>();
-  private savedReady = false;
+  /** Seconds of each sentence saved on the device, per voice. */
+  private saved = new Map<string, Map<number, number>>();
+  private loadingVoices = new Set<string>();
+  /** Voice chosen for a chapter (by its first sentence index); others use the default. */
+  private chapterVoices: Record<number, string>;
+  /** Chapters (by first sentence index) the listener asked to prepare, in order. */
+  private queue: number[];
   private busy = false;
   private waiters = new Map<number, (() => void)[]>();
   private loadedIndex = -1;
@@ -87,6 +93,7 @@ export class Narrator {
       chapterReady: 0,
       slow: false,
       preparing: false,
+      version: 0,
       finished: false,
       error: null,
       sleep: null,
@@ -111,8 +118,10 @@ export class Narrator {
         }
       }, 0);
     });
+    this.chapterVoices = loadJSON(`flybook:chapter-voices:${opts.bookId}`, {});
+    this.queue = loadJSON(`flybook:prepare-queue:${opts.bookId}`, []);
     this.setupMediaSession();
-    this.loadSaved();
+    this.pump();
   }
 
   // ---------- subscription (for React's useSyncExternalStore) ----------
@@ -208,10 +217,8 @@ export class Narrator {
     if (!changed) return;
     if (this.opts.engine === "system") speechSynthesis.cancel();
     this.audio.pause();
-    const voiceChanged = studioVoice !== this.opts.studioVoice;
     this.opts = { ...this.opts, engine, studioVoice, systemVoice };
     this.clearMemory();
-    if (voiceChanged) this.loadSaved();
     if (this.state.playing) this.playCurrent();
     else this.pump();
   }
@@ -226,6 +233,54 @@ export class Narrator {
       }, sleep.until - Date.now());
     }
     this.emit({ sleep });
+  }
+
+  // ---------- chapters: voice and preparing ahead ----------
+
+  /** The studio voice a chapter plays in. */
+  chapterVoice(start: number): string {
+    return this.chapterVoices[start] ?? this.opts.studioVoice;
+  }
+
+  /** True when the chapter has its own voice rather than the default. */
+  hasOwnVoice(start: number): boolean {
+    return start in this.chapterVoices;
+  }
+
+  setChapterVoice(start: number, voice: string | null) {
+    if (voice === null || voice === this.opts.studioVoice) delete this.chapterVoices[start];
+    else this.chapterVoices[start] = voice;
+    saveJSON(`flybook:chapter-voices:${this.opts.bookId}`, this.chapterVoices);
+    const [, end] = this.chapterBounds(start);
+    const playingHere = this.state.index >= start && this.state.index < end;
+    if (playingHere) this.audio.pause();
+    this.clearMemory();
+    if (playingHere && this.state.playing) this.playCurrent();
+    else this.pump();
+  }
+
+  /** Queue a chapter to be prepared in the background. */
+  prepareChapter(start: number) {
+    if (!this.queue.includes(start)) this.queue.push(start);
+    saveJSON(`flybook:prepare-queue:${this.opts.bookId}`, this.queue);
+    this.emit({ version: this.state.version + 1 });
+    this.pump();
+  }
+
+  cancelPrepare(start: number) {
+    this.queue = this.queue.filter((s) => s !== start);
+    saveJSON(`flybook:prepare-queue:${this.opts.bookId}`, this.queue);
+    this.emit({ version: this.state.version + 1 });
+  }
+
+  /** How much of a chapter is prepared, and whether it's queued. */
+  chapterProgress(start: number): { ready: number; total: number; queued: boolean; loaded: boolean } {
+    const [s, e] = this.chapterBounds(start);
+    const voice = this.chapterVoice(start);
+    const saved = this.savedFor(voice);
+    let ready = 0;
+    for (let i = s; i < e; i++) if (this.isReady(i)) ready++;
+    return { ready, total: e - s, queued: this.queue.includes(start), loaded: !!saved };
   }
 
   destroy() {
@@ -258,7 +313,7 @@ export class Narrator {
       if (token !== this.token) return;
       // Ran dry (not just loading saved audio): build a cushion sized to how
       // fast this device is, so playback then runs on without stopping.
-      if (!this.saved.has(index)) {
+      if (!this.savedHas(index)) {
         const cushion = this.cushionSeconds();
         await this.waitUntil(token, () => {
           const r = this.readyAhead(index);
@@ -366,12 +421,35 @@ export class Narrator {
     return Math.min(90, 20 * rtf);
   }
 
+  /** The voice sentence `i` plays in (its chapter's voice, or the default). */
+  private voiceAt(i: number): string {
+    return this.chapterVoice(this.chapterBounds(i)[0]);
+  }
+
+  /** Saved lengths for a voice, or undefined while they're being read. */
+  private savedFor(voice: string): Map<number, number> | undefined {
+    const map = this.saved.get(voice);
+    if (!map && !this.loadingVoices.has(voice)) {
+      this.loadingVoices.add(voice);
+      void savedLengths(this.opts.bookId, voice).then((lengths) => {
+        this.saved.set(voice, lengths);
+        this.loadingVoices.delete(voice);
+        this.pump();
+      });
+    }
+    return map;
+  }
+
+  private savedHas(i: number) {
+    return !!this.savedFor(this.voiceAt(i))?.has(i);
+  }
+
   private isReady(i: number) {
-    return this.cache.has(i) || this.saved.has(i);
+    return this.cache.has(i) || this.savedHas(i);
   }
 
   private secondsOf(i: number) {
-    return this.cache.get(i)?.seconds ?? this.saved.get(i) ?? 0;
+    return this.cache.get(i)?.seconds ?? this.savedFor(this.voiceAt(i))?.get(i) ?? 0;
   }
 
   /** Seconds of contiguous ready audio from `from`, and the first index not ready. */
@@ -401,42 +479,46 @@ export class Narrator {
 
   /** Generating needs the voice model; never start its download unasked. */
   private canGenerate() {
-    return kokoro.wasDownloaded() || kokoro.current.phase !== "idle" || this.state.playing;
-  }
-
-  private async loadSaved() {
-    const gen = this.voiceGen;
-    this.savedReady = false;
-    this.saved = new Map();
-    const lengths = await savedLengths(this.opts.bookId, this.opts.studioVoice);
-    if (gen !== this.voiceGen) return;
-    this.saved = lengths;
-    this.savedReady = true;
-    this.pump();
+    // After a crash, only start the voice when the listener presses play.
+    const asked = this.state.playing || this.queue.length > 0;
+    if (kokoro.crashedBefore() && kokoro.current.phase !== "ready") return asked;
+    return kokoro.wasDownloaded() || kokoro.current.phase !== "idle" || asked;
   }
 
   /** Does the next piece of work: load saved audio into memory, or generate. */
   private pump() {
-    if (this.opts.engine !== "studio" || this.busy || !this.savedReady || this.state.error) return;
+    if (this.opts.engine !== "studio" || this.busy || this.state.error) return;
     const { index } = this.state;
     const n = this.opts.segments.length;
+    if (!this.savedFor(this.voiceAt(index))) return; // reading what's saved; pump runs again after
     this.evict();
     this.report();
 
     // 1. Sentences about to play: get them into memory (from saved audio when possible).
     for (let i = index; i < Math.min(n, index + MEMORY_WINDOW); i++) {
       if (this.cache.has(i)) continue;
-      if (this.saved.has(i)) return void this.run(() => this.loadFromSaved(i));
+      if (this.savedHas(i)) return void this.run(() => this.loadFromSaved(i));
       if (!this.canGenerate()) return;
       return void this.run(() => this.generate(i, true), true);
     }
-
-    // 2. Background: prepare the rest of this chapter (at least MIN_PREPARE ahead).
     if (!this.canGenerate()) return;
+
+    // 2. The rest of the chapter being listened to (at least MIN_PREPARE ahead).
     const [, chapterEnd] = this.chapterBounds(index);
     const until = Math.min(n, Math.max(chapterEnd, index + MIN_PREPARE));
     for (let i = index; i < until; i++) {
       if (!this.isReady(i)) return void this.run(() => this.generate(i, false), true);
+    }
+
+    // 3. Chapters the listener queued, in order.
+    while (this.queue.length) {
+      const [s, e] = this.chapterBounds(this.queue[0]);
+      if (!this.savedFor(this.voiceAt(s))) return;
+      for (let i = s; i < e; i++) {
+        if (!this.isReady(i)) return void this.run(() => this.generate(i, false), true);
+      }
+      this.queue.shift(); // fully prepared
+      saveJSON(`flybook:prepare-queue:${this.opts.bookId}`, this.queue);
     }
     if (this.state.preparing) this.emit({ preparing: false });
   }
@@ -457,25 +539,27 @@ export class Narrator {
 
   private async loadFromSaved(i: number) {
     const gen = this.voiceGen;
-    const blob = await loadClip(this.opts.bookId, this.opts.studioVoice, i);
+    const voice = this.voiceAt(i);
+    const blob = await loadClip(this.opts.bookId, voice, i);
     if (gen !== this.voiceGen) return;
+    const lengths = this.saved.get(voice);
     if (!blob) {
-      this.saved.delete(i); // was cleaned up to free space; generate it again
+      lengths?.delete(i); // was cleaned up to free space; generate it again
       return;
     }
-    this.cache.set(i, { url: URL.createObjectURL(blob), blob, seconds: this.saved.get(i) ?? 0 });
+    this.cache.set(i, { url: URL.createObjectURL(blob), blob, seconds: lengths?.get(i) ?? 0 });
   }
 
   private async generate(i: number, keepInMemory: boolean) {
     const gen = this.voiceGen;
-    const voice = this.opts.studioVoice;
+    const voice = this.voiceAt(i);
     try {
       const clip = await kokoro.generate(speakable(this.opts.segments[i]), voice);
       if (gen !== this.voiceGen) {
         URL.revokeObjectURL(clip.url);
         return;
       }
-      this.saved.set(i, clip.seconds);
+      this.saved.get(voice)?.set(i, clip.seconds);
       void saveClip(this.opts.bookId, voice, i, clip.blob, clip.seconds);
       if (keepInMemory || Math.abs(i - this.state.index) < MEMORY_WINDOW) this.cache.set(i, clip);
       else URL.revokeObjectURL(clip.url);
@@ -502,9 +586,7 @@ export class Narrator {
     let ready = 0;
     for (let i = start; i < end; i++) if (this.isReady(i)) ready++;
     const chapterReady = end > start ? ready / (end - start) : 1;
-    if (Math.abs(ahead - this.state.ahead) >= 1 || Math.abs(chapterReady - this.state.chapterReady) >= 0.01) {
-      this.emit({ ahead, chapterReady });
-    }
+    this.emit({ ahead, chapterReady, version: this.state.version + 1 });
   }
 
   private evict() {
@@ -562,5 +644,22 @@ export class Narrator {
         /* action not supported on this browser */
       }
     }
+  }
+}
+
+function loadJSON<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveJSON(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* storage unavailable: keep in memory only */
   }
 }

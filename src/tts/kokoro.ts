@@ -1,9 +1,10 @@
 // Main-thread handle on the Kokoro worker: loads the model once, then turns
 // text into playable WAV blobs one request at a time.
 //
-// It picks the fastest way this device can run the voice — the GPU where the
-// browser offers WebGPU (iOS 26+, recent Chrome), otherwise the CPU with two
-// threads, otherwise one — and steps down by itself if a mode fails or hangs.
+// It picks the fastest way this device can run the voice — the GPU on
+// computers whose browser offers WebGPU, otherwise the CPU with two threads,
+// otherwise one — and steps down by itself if a mode fails, hangs, or crashes
+// the whole page (detected on the next visit).
 import type { WorkerRequest, WorkerResponse } from "./kokoro.worker";
 
 export type ModelState =
@@ -34,6 +35,26 @@ const NO_GPU_KEY = "flybook:no-webgpu";
 const SINGLE_THREAD_KEY = "flybook:single-thread";
 const DOWNLOADED_KEY = "flybook:model-downloaded";
 const DOWNLOADED_GPU_KEY = "flybook:model-downloaded-gpu";
+/** Set while the engine is starting or running; still there on the next
+ *  visit means the page crashed (it is cleared when the page is left normally). */
+const ATTEMPT_KEY = "flybook:engine-attempt";
+/** Even the safest mode crashed the page on this device. */
+const CRASHED_KEY = "flybook:engine-crashed";
+
+function read(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function clear(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
 
 function flag(key: string): boolean {
   try {
@@ -42,16 +63,17 @@ function flag(key: string): boolean {
     return false;
   }
 }
-function setFlag(key: string) {
+function setFlag(key: string, value = "1") {
   try {
-    localStorage.setItem(key, "1");
+    localStorage.setItem(key, value);
   } catch {
     /* ignore */
   }
 }
 
 async function gpuAvailable(): Promise<boolean> {
-  if (flag(NO_GPU_KEY)) return false;
+  // Phones can't hold the large GPU model in memory: Safari kills the page.
+  if (isIOS() || /Android|Mobile/i.test(navigator.userAgent) || flag(NO_GPU_KEY)) return false;
   const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
   if (!gpu) return false;
   try {
@@ -111,7 +133,36 @@ class KokoroClient {
 
   /** Download size for the next load, shown before asking to download. */
   get downloadLabel(): string {
-    return flag(NO_GPU_KEY) || !("gpu" in navigator) ? "about 90 MB" : "about 330 MB";
+    const phone = isIOS() || /Android|Mobile/i.test(navigator.userAgent);
+    return phone || flag(NO_GPU_KEY) || !("gpu" in navigator) ? "about 90 MB" : "about 330 MB";
+  }
+
+  /** The voice crashed this page before, even in its safest mode. */
+  crashedBefore(): boolean {
+    return flag(CRASHED_KEY);
+  }
+
+  constructor() {
+    // The engine was starting when the page last died: that mode is too much
+    // for this device, so step down before anything tries it again.
+    const attempt = read(ATTEMPT_KEY);
+    if (attempt) {
+      clear(ATTEMPT_KEY);
+      const [device, threads] = attempt.split("/");
+      if (!this.stepDown(device === "webgpu" ? "webgpu" : "wasm", Number(threads) || 1)) {
+        // Even one core was too much: stay on one, and only start when asked.
+        setFlag(SINGLE_THREAD_KEY);
+        setFlag(CRASHED_KEY);
+      }
+    }
+    // Leaving the page normally isn't a crash.
+    const left = () => clear(ATTEMPT_KEY);
+    const back = () => {
+      if (document.visibilityState === "hidden") left();
+      else if (this.worker && this.attempt) setFlag(ATTEMPT_KEY, `${this.attempt.device}/${this.attempt.threads}`);
+    };
+    window.addEventListener("pagehide", left);
+    document.addEventListener("visibilitychange", back);
   }
 
   subscribe(fn: Listener) {
@@ -171,6 +222,7 @@ class KokoroClient {
 
   private start(device: Device, threads: number): Promise<void> {
     this.attempt = { device, threads };
+    setFlag(ATTEMPT_KEY, `${device}/${threads}`);
     return new Promise<void>((resolve, reject) => {
       const worker = new Worker(new URL("./kokoro.worker.ts", import.meta.url), { type: "module" });
       this.worker = worker;
@@ -183,6 +235,7 @@ class KokoroClient {
             break;
           case "ready":
             ready = true;
+            clear(CRASHED_KEY);
             setFlag(msg.device === "webgpu" ? DOWNLOADED_GPU_KEY : DOWNLOADED_KEY);
             this.engine = { device: msg.device, threads: msg.threads, isolated: msg.isolated };
             this.servedSinceLoad = 0;
@@ -190,6 +243,7 @@ class KokoroClient {
             resolve();
             break;
           case "load-error": {
+            clear(ATTEMPT_KEY);
             const message = /fetch|network|load failed/i.test(msg.message)
               ? "Couldn't download the voices — check your internet connection."
               : msg.message;
@@ -241,6 +295,7 @@ class KokoroClient {
   private teardown() {
     this.worker?.terminate();
     this.worker = null;
+    clear(ATTEMPT_KEY);
   }
 
   /** Drops a stuck or crashed engine; the next request loads a fresh one. */

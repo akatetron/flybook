@@ -3,12 +3,12 @@ import { getBook, updateBook, type BookContent, type BookMeta } from "../lib/db"
 import type { Settings } from "../lib/settings";
 import { Narrator, type NarratorState } from "../tts/narrator";
 import { kokoro } from "../tts/kokoro";
-import { studioVoice } from "../tts/voices";
+import { STUDIO_VOICES, studioVoice } from "../tts/voices";
 import { findSystemVoice } from "../tts/system";
 import { WORDS_PER_MINUTE, formatDuration } from "../lib/format";
 import { Sheet } from "./Sheet";
 import { ModelDownloadCard, VoiceSheet, formatMB, useModelState } from "./VoiceSheet";
-import { BackIcon, ListIcon, MicIcon, MoonIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon, TextSizeIcon } from "./Icons";
+import { BackIcon, CheckIcon, ListIcon, MicIcon, MoonIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon, TextSizeIcon } from "./Icons";
 
 interface ReaderProps {
   bookId: string;
@@ -315,7 +315,9 @@ function ReaderView({
   }
 
   const voiceLabel =
-    settings.engine === "studio" ? studioVoice(settings.studioVoice).name : findSystemVoice(settings.systemVoice)?.name ?? "Phone voice";
+    settings.engine === "studio"
+      ? studioVoice(narrator.chapterVoice(chapters[chapterIndex]?.start ?? 0)).name
+      : findSystemVoice(settings.systemVoice)?.name ?? "Phone voice";
 
   const chapterTitle = chapters[chapterIndex]?.title;
   const current = segments[index]?.t ?? "";
@@ -364,7 +366,14 @@ function ReaderView({
             <span className="np-now">{current}</span>
             {upcoming && <span className="np-next">{upcoming}</span>}
           </button>
-          {settings.engine === "studio" && <PrepPanel state={state} />}
+          {settings.engine === "studio" && (
+            <PrepPanel
+              state={state}
+              narrator={narrator}
+              nextChapter={chapters[chapterIndex + 1] ?? null}
+              onOpenChapters={() => setSheet("chapters")}
+            />
+          )}
           {settings.engine === "studio" && state.slow && !state.error && (
             <div className="np-hint">
               <p>
@@ -471,8 +480,13 @@ function ReaderView({
       <VoiceSheet
         open={sheet === "voice"}
         onClose={closeSheet}
-        settings={settings}
-        onChange={onSettings}
+        settings={{ ...settings, studioVoice: narrator.chapterVoice(chapters[chapterIndex]?.start ?? 0) }}
+        onChange={(patch) => {
+          // Picking a voice here applies to the chapter being listened to right away.
+          const start = chapters[chapterIndex]?.start ?? 0;
+          if (patch.studioVoice && narrator.hasOwnVoice(start)) narrator.setChapterVoice(start, null);
+          onSettings(patch);
+        }}
         onBeforePreview={() => narrator.pause()}
       />
 
@@ -501,21 +515,35 @@ function ReaderView({
       </Sheet>
 
       <Sheet title="Chapters" open={sheet === "chapters"} onClose={closeSheet}>
+        {settings.engine === "studio" ? (
+          <p className="muted small hint">
+            Tap <strong>Prepare</strong> to get a chapter ready ahead of time — listen to one while the next is being
+            prepared. Each chapter can have its own voice.
+          </p>
+        ) : (
+          <p className="muted small hint">Preparing chapters and per-chapter voices are available with studio voices.</p>
+        )}
         <ul className="chapter-list">
           {chapters.map((c, i) => (
-            <li key={`${c.start}-${i}`}>
-              <button
-                className={i === chapterIndex ? "current" : ""}
-                onClick={() => {
-                  setFollow(true);
-                  narrator.seek(c.start);
-                  setSheet(null);
-                }}
-              >
-                <span className="chapter-name">{c.title}</span>
-                <span className="muted small">p. {segments[c.start]?.p}</span>
-              </button>
-            </li>
+            <ChapterRow
+              key={`${c.start}-${i}`}
+              narrator={narrator}
+              version={state.version}
+              title={c.title}
+              start={c.start}
+              page={segments[c.start]?.p ?? 1}
+              minutes={
+                (wordsBefore[chapters[i + 1]?.start ?? segments.length] - wordsBefore[c.start]) /
+                (WORDS_PER_MINUTE * settings.speed)
+              }
+              current={i === chapterIndex}
+              studio={settings.engine === "studio"}
+              onPlay={() => {
+                setFollow(true);
+                narrator.seek(c.start);
+                setSheet(null);
+              }}
+            />
           ))}
         </ul>
       </Sheet>
@@ -617,7 +645,17 @@ function formatAhead(seconds: number): string {
 const PREP_TARGET_SECONDS = 600;
 
 /** How much audio is ready ahead, and what the voice engine is doing. */
-function PrepPanel({ state }: { state: NarratorState }) {
+function PrepPanel({
+  state,
+  narrator,
+  nextChapter,
+  onOpenChapters,
+}: {
+  state: NarratorState;
+  narrator: Narrator;
+  nextChapter: { title: string; start: number } | null;
+  onOpenChapters: () => void;
+}) {
   const model = useModelState();
   const info = kokoro.info;
   const rtf = kokoro.realTimeFactor;
@@ -625,7 +663,7 @@ function PrepPanel({ state }: { state: NarratorState }) {
   let activity: string;
   if (model.phase === "loading") activity = "Starting the voice engine…";
   else if (state.preparing) activity = state.playing ? "Preparing the next sentences…" : "Preparing while paused…";
-  else if (state.chapterReady >= 0.999) activity = "This chapter is fully prepared";
+  else if (state.chapterReady >= 0.999) activity = "Chapter ready";
   else activity = "Ready";
   const engine = info
     ? `${info.device === "webgpu" ? "GPU" : `CPU · ${info.threads} ${info.threads === 1 ? "core" : "cores"}`}${
@@ -645,6 +683,116 @@ function PrepPanel({ state }: { state: NarratorState }) {
         <span>{activity}</span>
         <span>{engine}</span>
       </div>
+      {nextChapter && <NextChapterPrep narrator={narrator} chapter={nextChapter} onOpenChapters={onOpenChapters} />}
+    </div>
+  );
+}
+
+function ChapterRow({
+  narrator,
+  title,
+  start,
+  page,
+  minutes,
+  current,
+  studio,
+  onPlay,
+}: {
+  narrator: Narrator;
+  version: number;
+  title: string;
+  start: number;
+  page: number;
+  minutes: number;
+  current: boolean;
+  studio: boolean;
+  onPlay: () => void;
+}) {
+  const voice = narrator.chapterVoice(start);
+  const p = narrator.chapterProgress(start);
+  const pct = p.total ? Math.floor((p.ready / p.total) * 100) : 0;
+  const done = p.total > 0 && p.ready >= p.total;
+  return (
+    <li className={`ch ${current ? "current" : ""}`}>
+      <button className="ch-main" onClick={onPlay}>
+        <span className="ch-title">{title}</span>
+        <span className="muted small">
+          p. {page} · {formatDuration(minutes)}
+          {current ? " · now playing" : ""}
+        </span>
+      </button>
+      {studio && (
+        <div className="ch-tools">
+          <label className="ch-voice">
+            <MicIcon width={14} height={14} />
+            <select
+              value={voice}
+              aria-label={`Voice for ${title}`}
+              onChange={(e) => narrator.setChapterVoice(start, e.target.value)}
+            >
+              {STUDIO_VOICES.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name} ({v.gender === "Female" ? "F" : "M"}, {v.accent === "British" ? "UK" : "US"})
+                </option>
+              ))}
+            </select>
+          </label>
+          {done ? (
+            <span className="ch-state ready">
+              <CheckIcon width={14} height={14} /> Ready
+            </span>
+          ) : p.queued ? (
+            <span className="ch-state">
+              <span className="ch-bar">
+                <span style={{ width: `${pct}%` }} />
+              </span>
+              {pct}%
+              <button className="ch-cancel" onClick={() => narrator.cancelPrepare(start)} aria-label="Stop preparing">
+                ✕
+              </button>
+            </span>
+          ) : (
+            <button className="ch-prepare" onClick={() => narrator.prepareChapter(start)}>
+              {pct > 0 ? `Prepare (${pct}%)` : "Prepare"}
+            </button>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+function NextChapterPrep({
+  narrator,
+  chapter,
+  onOpenChapters,
+}: {
+  narrator: Narrator;
+  chapter: { title: string; start: number };
+  onOpenChapters: () => void;
+}) {
+  const p = narrator.chapterProgress(chapter.start);
+  const pct = p.total ? Math.floor((p.ready / p.total) * 100) : 0;
+  const voice = studioVoice(narrator.chapterVoice(chapter.start)).name;
+  return (
+    <div className="prep-next">
+      <span className="title-line">
+        Next: {chapter.title} · {voice}
+      </span>
+      {p.ready >= p.total ? (
+        <span className="ch-state ready">
+          <CheckIcon width={14} height={14} /> Ready
+        </span>
+      ) : p.queued ? (
+        <span className="ch-state">{pct}% prepared</span>
+      ) : (
+        <button className="ch-prepare" onClick={() => narrator.prepareChapter(chapter.start)}>
+          Prepare
+        </button>
+      )}
+      <button className="link small" onClick={onOpenChapters}>
+        All
+      </button>
     </div>
   );
 }

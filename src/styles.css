@@ -643,7 +643,7 @@ p {
 }
 .np-art {
   flex: 0 1 auto;
-  height: clamp(140px, 30dvh, 340px);
+  height: clamp(120px, 25dvh, 300px);
   aspect-ratio: 3 / 4;
   max-width: 78vw;
   border-radius: 14px;
@@ -698,7 +698,7 @@ p {
 }
 .np-caption {
   flex: 1;
-  min-height: 0;
+  min-height: 3.2em;
   width: 100%;
   max-width: 34em;
   display: flex;
@@ -747,8 +747,14 @@ p {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
+.prep-row.small span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .prep-row.small span:last-child {
   text-align: right;
+  flex: none;
 }
 .bar-fill.pulse {
   animation: pulse 1.4s ease-in-out infinite;
@@ -1140,25 +1146,116 @@ p {
   margin: 0;
   padding: 0;
 }
-.chapter-list button {
-  width: 100%;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  text-align: left;
-  padding: 14px 10px;
-  color: var(--text-soft);
+.ch {
+  display: grid;
+  gap: 8px;
+  padding: 12px 8px;
 }
-.chapter-list li + li button {
+.ch + .ch {
   border-top: 1px solid var(--line);
 }
-.chapter-list button.current {
-  color: var(--accent);
-  font-weight: 700;
+.ch.current {
+  background: var(--accent-soft);
+  border-radius: var(--r-sm);
 }
-.chapter-name {
+.ch-main {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  width: 100%;
+}
+.ch-title {
+  font-weight: 650;
+  color: var(--text);
+}
+.ch.current .ch-title {
+  color: var(--accent);
+}
+.ch-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ch-voice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 34px;
+  border-radius: 17px;
+  background: var(--surface-2);
+  color: var(--text-soft);
   min-width: 0;
+}
+.ch-voice select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 0;
+  max-width: 46vw;
+}
+.ch-prepare {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 17px;
+  background: var(--gold);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 14px;
+  flex: none;
+}
+.ch-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.ch-state.ready {
+  color: #3f9a62;
+}
+.ch-bar {
+  width: 64px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.ch-bar span {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+}
+.ch-cancel {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+}
+.prep-next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.prep-next .title-line {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-soft);
 }
 .chip-grid {
   display: flex;
@@ -1181,10 +1278,21 @@ p {
   height: clamp(110px, 24dvh, 250px);
 }
 
+/* Shorter phones: give the caption room next to the prepare panel. */
+@media (max-height: 800px) {
+  .np-art,
+  .listen.has-hint .np-art {
+    height: clamp(90px, 18dvh, 200px);
+  }
+  .listen {
+    gap: 10px;
+  }
+}
 /* Short screens (small iPhones, landscape): tighten the listen view. */
 @media (max-height: 700px) {
-  .np-art {
-    height: clamp(110px, 26dvh, 220px);
+  .np-art,
+  .listen.has-hint .np-art {
+    height: clamp(80px, 15dvh, 160px);
   }
   .np-now {
     font-size: 18px;
