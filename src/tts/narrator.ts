@@ -23,6 +23,8 @@ export interface NarratorState {
   chapterReady: number;
   /** This device makes speech slower than it plays. */
   slow: boolean;
+  /** Audio is being generated right now (also while paused). */
+  preparing: boolean;
   finished: boolean;
   error: string | null;
   sleep: { until: number } | { chapterEnd: true } | null;
@@ -84,6 +86,7 @@ export class Narrator {
       ahead: 0,
       chapterReady: 0,
       slow: false,
+      preparing: false,
       finished: false,
       error: null,
       sleep: null,
@@ -425,7 +428,7 @@ export class Narrator {
       if (this.cache.has(i)) continue;
       if (this.saved.has(i)) return void this.run(() => this.loadFromSaved(i));
       if (!this.canGenerate()) return;
-      return void this.run(() => this.generate(i, true));
+      return void this.run(() => this.generate(i, true), true);
     }
 
     // 2. Background: prepare the rest of this chapter (at least MIN_PREPARE ahead).
@@ -433,13 +436,15 @@ export class Narrator {
     const [, chapterEnd] = this.chapterBounds(index);
     const until = Math.min(n, Math.max(chapterEnd, index + MIN_PREPARE));
     for (let i = index; i < until; i++) {
-      if (!this.isReady(i)) return void this.run(() => this.generate(i, false));
+      if (!this.isReady(i)) return void this.run(() => this.generate(i, false), true);
     }
+    if (this.state.preparing) this.emit({ preparing: false });
   }
 
-  private run(job: () => Promise<void>) {
+  private run(job: () => Promise<void>, generating = false) {
     const gen = this.voiceGen;
     this.busy = true;
+    if (generating !== this.state.preparing) this.emit({ preparing: generating });
     job()
       .catch(() => undefined)
       .finally(() => {

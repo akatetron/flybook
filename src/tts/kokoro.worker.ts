@@ -8,12 +8,12 @@ import { env } from "@huggingface/transformers";
 import ortWasmUrl from "../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm?url";
 
 export type WorkerRequest =
-  | { type: "load"; threads: number }
+  | { type: "load"; device: "webgpu" | "wasm"; threads: number }
   | { type: "generate"; id: number; text: string; voice: string };
 
 export type WorkerResponse =
   | { type: "progress"; loaded: number; total: number }
-  | { type: "ready" }
+  | { type: "ready"; device: "webgpu" | "wasm"; threads: number; isolated: boolean }
   | { type: "load-error"; message: string }
   | { type: "audio"; id: number; wav: ArrayBuffer; seconds: number }
   | { type: "error"; id: number; message: string };
@@ -51,7 +51,7 @@ function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
   return buffer;
 }
 
-async function load() {
+async function load(device: "webgpu" | "wasm") {
   const files = new Map<string, { loaded: number; total: number }>();
   const progress_callback = (p: { status: string; file?: string; loaded?: number; total?: number }) => {
     if (p.status !== "progress" || !p.file) return;
@@ -73,14 +73,23 @@ async function load() {
         "The voice engine file is missing from this website (upload the whole site folder, including assets/*.wasm)."
       );
     }
-    // The compact 8-bit model on the CPU (WebAssembly): ~90 MB, fast enough
-    // for real-time narration, and the same on phones and computers.
+    // GPU (WebGPU, e.g. iOS 26+): the full-precision model (~330 MB) runs
+    // several times faster than real time. CPU: the compact 8-bit model
+    // (~90 MB).
     tts = await KokoroTTS.from_pretrained(MODEL_ID, {
-      dtype: "q8",
-      device: "wasm",
+      dtype: device === "webgpu" ? "fp32" : "q8",
+      device,
       progress_callback: progress_callback as never,
     });
-    post({ type: "ready" });
+    // Warm up once (on a GPU this compiles its programs), so the first real
+    // sentence isn't slow and a broken backend fails here, not mid-book.
+    await tts.generate("Hello.", { voice: "af_heart" });
+    post({
+      type: "ready",
+      device,
+      threads: device === "wasm" ? (env.backends.onnx.wasm?.numThreads ?? 1) : 1,
+      isolated: self.crossOriginIsolated,
+    });
   } catch (err) {
     post({ type: "load-error", message: err instanceof Error ? err.message : String(err) });
   }
@@ -101,8 +110,8 @@ if (!isRuntimeThread) self.onmessage = async (event: MessageEvent<WorkerRequest>
     wasm.wasmPaths = { wasm: wasmUrl };
     // Threads only work when the page is cross-origin isolated.
     wasm.numThreads = self.crossOriginIsolated ? msg.threads : 1;
-    if (!tts) await load();
-    else post({ type: "ready" });
+    if (!tts) await load(msg.device);
+    else post({ type: "ready", device: msg.device, threads: wasm.numThreads ?? 1, isolated: self.crossOriginIsolated });
     return;
   }
   if (msg.type === "generate") {

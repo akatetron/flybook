@@ -643,7 +643,7 @@ p {
 }
 .np-art {
   flex: 0 1 auto;
-  height: clamp(150px, 34dvh, 360px);
+  height: clamp(140px, 30dvh, 340px);
   aspect-ratio: 3 / 4;
   max-width: 78vw;
   border-radius: 14px;
@@ -721,6 +721,42 @@ p {
   line-height: 1.5;
   color: var(--muted);
   opacity: 0.7;
+}
+.prep {
+  flex: none;
+  width: 100%;
+  max-width: 34em;
+  padding: 10px 14px 9px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 4px;
+}
+.prep .bar {
+  margin: 2px 0;
+}
+.prep-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13.5px;
+}
+.prep-row strong {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.prep-row.small span:last-child {
+  text-align: right;
+}
+.bar-fill.pulse {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
 }
 .np-hint {
   flex: none;

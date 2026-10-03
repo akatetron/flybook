@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { getBook, updateBook, type BookContent, type BookMeta } from "../lib/db";
 import type { Settings } from "../lib/settings";
-import { Narrator } from "../tts/narrator";
+import { Narrator, type NarratorState } from "../tts/narrator";
 import { kokoro } from "../tts/kokoro";
 import { studioVoice } from "../tts/voices";
 import { findSystemVoice } from "../tts/system";
@@ -306,11 +306,12 @@ function ReaderView({
       </span>
     );
   } else if (settings.engine === "studio" && (state.ahead >= 1 || state.chapterReady > 0)) {
-    const secs = Math.round(state.ahead);
-    const ahead = secs >= 60 ? `${Math.floor(secs / 60)} min ready ahead` : secs >= 1 ? `${secs}s ready ahead` : "";
-    const chapter =
-      state.chapterReady >= 0.999 ? "Chapter fully prepared" : `Chapter ${Math.floor(state.chapterReady * 100)}% prepared`;
-    status = <span className="status quiet">{ahead ? `${chapter} · ${ahead}` : chapter}</span>;
+    status =
+      view === "read" ? (
+        <span className="status quiet">
+          {formatAhead(state.ahead)} prepared ahead{state.preparing ? " · preparing…" : ""}
+        </span>
+      ) : null;
   }
 
   const voiceLabel =
@@ -363,6 +364,7 @@ function ReaderView({
             <span className="np-now">{current}</span>
             {upcoming && <span className="np-next">{upcoming}</span>}
           </button>
+          {settings.engine === "studio" && <PrepPanel state={state} />}
           {settings.engine === "studio" && state.slow && !state.error && (
             <div className="np-hint">
               <p>
@@ -603,3 +605,47 @@ function SleepCountdown({ until }: { until: number }) {
   }, []);
   return <>Sleeping in {Math.max(1, Math.ceil((until - now) / 60_000))} min</>;
 }
+
+function formatAhead(seconds: number): string {
+  const s = Math.floor(seconds);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m} min ${s % 60}s` : `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+
+/** Ten minutes prepared ahead fills the bar. */
+const PREP_TARGET_SECONDS = 600;
+
+/** How much audio is ready ahead, and what the voice engine is doing. */
+function PrepPanel({ state }: { state: NarratorState }) {
+  const model = useModelState();
+  const info = kokoro.info;
+  const rtf = kokoro.realTimeFactor;
+  const pct = Math.min(100, (state.ahead / PREP_TARGET_SECONDS) * 100);
+  let activity: string;
+  if (model.phase === "loading") activity = "Starting the voice engine…";
+  else if (state.preparing) activity = state.playing ? "Preparing the next sentences…" : "Preparing while paused…";
+  else if (state.chapterReady >= 0.999) activity = "This chapter is fully prepared";
+  else activity = "Ready";
+  const engine = info
+    ? `${info.device === "webgpu" ? "GPU" : `CPU · ${info.threads} ${info.threads === 1 ? "core" : "cores"}`}${
+        rtf ? ` · ${(1 / rtf).toFixed(1)}× speed` : ""
+      }`
+    : "";
+  return (
+    <div className="prep" aria-live="polite">
+      <div className="prep-row">
+        <span>Prepared ahead</span>
+        <strong>{formatAhead(state.ahead)}</strong>
+      </div>
+      <div className="bar thin">
+        <div className={`bar-fill ${state.preparing ? "pulse" : ""}`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="prep-row muted small">
+        <span>{activity}</span>
+        <span>{engine}</span>
+      </div>
+    </div>
+  );
+}
+
