@@ -368,6 +368,14 @@ p {
   text-align: center;
   cursor: pointer;
 }
+.sample-btn {
+  justify-self: center;
+  padding: 8px 14px;
+  color: var(--accent);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .drop-icon {
   display: grid;
   place-items: center;
@@ -728,6 +736,7 @@ p {
   flex: none;
   width: 100%;
   max-width: 34em;
+  grid-template-columns: minmax(0, 1fr);
   padding: 10px 14px 9px;
   border-radius: var(--r-sm);
   background: var(--surface);
@@ -754,12 +763,17 @@ p {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.prep-row {
+  min-width: 0;
+}
 .prep-row.small {
   flex-wrap: wrap;
+  row-gap: 0;
 }
 .prep-row.small span:last-child {
   text-align: right;
   margin-left: auto;
+  max-width: 100%;
 }
 .bar-fill.pulse {
   animation: pulse 1.4s ease-in-out infinite;
@@ -1068,6 +1082,24 @@ p {
 .hint {
   margin-top: -2px;
 }
+.voice-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-weight: 700;
+  color: var(--text);
+}
+.tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
 .voice-list {
   list-style: none;
   margin: 0;
@@ -1256,6 +1288,9 @@ p {
   padding-top: 8px;
   border-top: 1px solid var(--line);
   font-size: 13px;
+}
+.prep-next {
+  min-width: 0;
 }
 .prep-next .title-line {
   flex: 1;

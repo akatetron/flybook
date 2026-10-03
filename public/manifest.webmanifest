@@ -1,13 +1,28 @@
 {
-  "name": "Flybook — PDF to audiobook",
+  "name": "Flybook \u2014 PDF to audiobook",
   "short_name": "Flybook",
-  "description": "Listen to any PDF as an audiobook. Private, on-device, no account.",
+  "description": "Listen to any PDF as an audiobook. Natural voices made on your device \u2014 no account, no uploads.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0f1a14",
   "theme_color": "#0f1a14",
   "icons": [
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
   ]
 }

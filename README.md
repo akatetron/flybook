@@ -11,11 +11,15 @@ Turn any PDF into an audiobook, right in the browser. Built for phones.
 
 - **No login, no server.** The PDF is read on the device with pdf.js, and the
   library and reading position are saved in the browser (IndexedDB).
-- **Good voices, generated on the device.** "Studio voices" run the open
-  [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) model inside a Web
-  Worker (kokoro-js / ONNX Runtime Web). The model is a one-time download of
-  about 90 MB, cached afterwards, and works offline. The phone's built-in
-  voices are available as an instant fallback.
+- **Natural voices, generated on the device.** Two open-source engines run
+  in Web Workers, nothing is sent anywhere:
+  - **Piper** natural voices (~60 MB each, downloaded once) run faster than
+    real time on phone CPUs, so they're the default on iPhone and Android.
+  - **Kokoro** studio voices are the most lifelike; they use the GPU on
+    computers (WebGPU) and are offered on phones with "prepare ahead".
+  - The phone's built-in voices are available as an instant fallback.
+- **Prepare chapters ahead**, each with its own voice. Audio is saved on the
+  device, so prepared chapters play instantly and offline.
 - **Audiobook controls.** Follow-along highlighting, tap any sentence to jump
   there, chapters (from the PDF outline, detected headings, or page ranges),
   speed, a sleep timer, lock-screen/headphone controls, and resume where you
@@ -57,6 +61,18 @@ service worker adds them itself and reloads the page once on the first visit.
 | Playback engine: generates a few sentences ahead, Media Session | `src/tts/narrator.ts` |
 | Phone voices (Web Speech API) | `src/tts/system.ts` |
 | Library / reader UI | `src/components/` |
+
+## Try it
+
+Open the site and tap **"or try a short sample story"** — an original
+three-chapter story bundled with the app, handy for a quick demo.
+
+## Credits
+
+Piper voices by [rhasspy/piper](https://github.com/rhasspy/piper) (MIT; voices
+from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices)),
+phonemizer build from `@diffusionstudio/piper-wasm` (MIT), Kokoro-82M via
+`kokoro-js` (Apache-2.0), ONNX Runtime Web (MIT), pdf.js (Apache-2.0).
 
 ## Known limits
 

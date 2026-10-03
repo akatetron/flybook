@@ -10,7 +10,8 @@ import type { Chapter, Segment } from "../lib/text";
 import { speakable } from "../lib/text";
 import type { Engine } from "../lib/settings";
 import { loadClip, saveClip, savedLengths } from "../lib/audioStore";
-import { kokoro, type Clip } from "./kokoro";
+import type { Clip } from "./kokoro";
+import { tts } from "./engines";
 import { findSystemVoice } from "./system";
 
 export interface NarratorState {
@@ -419,7 +420,7 @@ export class Narrator {
 
   /** How much audio to have ready before resuming after running dry. */
   private cushionSeconds(): number {
-    const rtf = kokoro.realTimeFactor;
+    const rtf = tts.realTimeFactor(this.voiceAt(this.state.index));
     if (rtf === null) return 8;
     if (rtf <= 0.85) return 4;
     // Slower than real time: a bigger cushion buys a longer stretch of
@@ -428,7 +429,7 @@ export class Narrator {
   }
 
   /** The voice sentence `i` plays in (its chapter's voice, or the default). */
-  private voiceAt(i: number): string {
+  voiceAt(i: number): string {
     return this.chapterVoice(this.chapterBounds(i)[0]);
   }
 
@@ -487,8 +488,10 @@ export class Narrator {
   private canGenerate() {
     // After a crash, only start the voice when the listener presses play.
     const asked = this.state.playing || this.queue.length > 0;
-    if (kokoro.crashedBefore() && kokoro.current.phase !== "ready") return asked;
-    return kokoro.wasDownloaded() || kokoro.current.phase !== "idle" || asked;
+    const voice = this.voiceAt(this.state.index);
+    const phase = tts.state(voice).phase;
+    if (tts.crashedBefore(voice) && phase !== "ready") return asked;
+    return tts.wasDownloaded(voice) || phase !== "idle" || asked;
   }
 
   /** Does the next piece of work: load saved audio into memory, or generate. */
@@ -560,7 +563,7 @@ export class Narrator {
     const gen = this.voiceGen;
     const voice = this.voiceAt(i);
     try {
-      const clip = await kokoro.generate(speakable(this.opts.segments[i]), voice);
+      const clip = await tts.generate(speakable(this.opts.segments[i]), voice);
       if (gen !== this.voiceGen) {
         URL.revokeObjectURL(clip.url);
         return;
@@ -569,11 +572,11 @@ export class Narrator {
       void saveClip(this.opts.bookId, voice, i, clip.blob, clip.seconds);
       if (keepInMemory || Math.abs(i - this.state.index) < MEMORY_WINDOW) this.cache.set(i, clip);
       else URL.revokeObjectURL(clip.url);
-      const rtf = kokoro.realTimeFactor;
+      const rtf = tts.realTimeFactor(voice);
       if (rtf !== null && rtf > 1.05 !== this.state.slow) this.emit({ slow: rtf > 1.05 });
     } catch (err) {
       if (gen !== this.voiceGen) return;
-      if (kokoro.current.phase === "error") {
+      if (tts.state(voice).phase === "error") {
         // The engine itself failed: stop and tell the listener.
         this.emit({ error: (err as Error).message, buffering: false });
         this.notify();

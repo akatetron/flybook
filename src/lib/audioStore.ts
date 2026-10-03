@@ -1,7 +1,7 @@
 // Generated narration is saved on the device, so a sentence is only ever
 // generated once: replaying, rewinding, re-opening a book or listening to a
 // chapter that was prepared earlier is instant and never buffers.
-import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from "idb";
 
 type ClipKey = [book: string, voice: string, index: number];
 
@@ -19,9 +19,14 @@ interface AudioDB extends DBSchema {
 /** Above this, the oldest saved audio is removed to make room. */
 const MAX_BYTES = 600 * 1024 * 1024;
 
+// Version 1 may hold distorted audio from a broken GPU mode: discard it.
+const DB_NAME = "flybook-audio-2";
+const OLD_DB_NAMES = ["flybook-audio"];
+
 let dbPromise: Promise<IDBPDatabase<AudioDB>> | null = null;
 function db() {
-  dbPromise ??= openDB<AudioDB>("flybook-audio", 1, {
+  if (!dbPromise) for (const name of OLD_DB_NAMES) void deleteDB(name).catch(() => undefined);
+  dbPromise ??= openDB<AudioDB>(DB_NAME, 1, {
     upgrade(d) {
       d.createObjectStore("clips", { keyPath: ["book", "voice", "index"] });
       d.createObjectStore("lengths", { keyPath: ["book", "voice", "index"] }).createIndex("at", "at");

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { getBook, updateBook, type BookContent, type BookMeta } from "../lib/db";
 import type { Settings } from "../lib/settings";
 import { Narrator, type NarratorState } from "../tts/narrator";
-import { kokoro } from "../tts/kokoro";
+import { tts } from "../tts/engines";
 import { STUDIO_VOICES, studioVoice } from "../tts/voices";
 import { findSystemVoice } from "../tts/system";
 import { WORDS_PER_MINUTE, formatDuration } from "../lib/format";
@@ -106,8 +106,9 @@ function ReaderView({
   );
 
   const state = useSyncExternalStore(narrator.subscribe, narrator.getState);
-  const model = useModelState();
   const { index } = state;
+  const currentVoice = narrator.voiceAt(index);
+  const model = useModelState(currentVoice);
 
   // ---------- derived numbers ----------
   const wordsBefore = useMemo(() => {
@@ -135,7 +136,7 @@ function ReaderView({
       settings.engine === "studio" &&
       model.phase !== "ready" &&
       model.phase !== "loading" &&
-      !kokoro.wasDownloaded()
+      !tts.wasDownloaded(currentVoice)
     ) {
       setSheet("model");
       return;
@@ -473,7 +474,7 @@ function ReaderView({
 
         <button className="voice-chip" onClick={() => setSheet("voice")}>
           <MicIcon width={15} height={15} /> {voiceLabel}
-          <span className="voice-kind">{settings.engine === "studio" ? "Studio" : "iPhone / phone"} voice</span>
+          <span className="voice-kind">{settings.engine === "studio" ? tts.engineName(currentVoice) : "Phone voice"}</span>
         </button>
       </footer>
 
@@ -490,18 +491,17 @@ function ReaderView({
         onBeforePreview={() => narrator.pause()}
       />
 
-      <Sheet title="Studio voices" open={sheet === "model"} onClose={closeSheet}>
-        <p>
-          Flybook's studio voices sound like a real narrator and run entirely on your phone — nothing is uploaded.
-        </p>
+      <Sheet title={`${studioVoice(currentVoice).name} voice`} open={sheet === "model"} onClose={closeSheet}>
+        <p>This voice runs entirely on your device — nothing is uploaded.</p>
         <p className="muted small">
-          They need a one-time download of {kokoro.downloadLabel} (Wi-Fi recommended). After that they work offline.
+          It needs a one-time download of {tts.downloadLabel(currentVoice)} (Wi-Fi recommended). After that it works
+          offline.
         </p>
         <div className="stack">
           <button
             className="btn primary"
             onClick={() => {
-              kokoro.load().catch(() => undefined);
+              tts.load(currentVoice).catch(() => undefined);
               narrator.play();
               setSheet(null);
             }}
@@ -608,7 +608,7 @@ function ReaderView({
           />
           <span style={{ fontSize: 26 }}>A</span>
         </label>
-        {settings.engine === "studio" && <ModelDownloadCard />}
+        {settings.engine === "studio" && <ModelDownloadCard voice={currentVoice} />}
       </Sheet>
     </div>
   );
@@ -656,20 +656,18 @@ function PrepPanel({
   nextChapter: { title: string; start: number } | null;
   onOpenChapters: () => void;
 }) {
-  const model = useModelState();
-  const info = kokoro.info;
-  const rtf = kokoro.realTimeFactor;
+  const voice = narrator.voiceAt(state.index);
+  const model = useModelState(voice);
+  const label = tts.label(voice);
+  const rtf = tts.realTimeFactor(voice);
   const pct = Math.min(100, (state.ahead / PREP_TARGET_SECONDS) * 100);
   let activity: string;
-  if (model.phase === "loading") activity = "Starting the voice engine…";
+  if (model.phase === "loading")
+    activity = model.total && model.loaded < model.total ? `Downloading voice · ${formatMB(model.loaded)} of ${formatMB(model.total)}` : "Starting the voice…";
   else if (state.preparing) activity = state.playing ? "Preparing the next sentences…" : "Preparing while paused…";
   else if (state.chapterReady >= 0.999) activity = "Chapter ready";
   else activity = "Ready";
-  const engine = info
-    ? `${info.device === "webgpu" ? "GPU" : `CPU · ${info.threads} ${info.threads === 1 ? "core" : "cores"}`}${
-        rtf ? ` · ${(1 / rtf).toFixed(1)}× speed` : ""
-      }`
-    : "";
+  const engine = label ? `${label}${rtf ? ` · ${(1 / rtf).toFixed(1)}× speed` : ""}` : "";
   return (
     <div className="prep" aria-live="polite">
       <div className="prep-row">
@@ -730,10 +728,14 @@ function ChapterRow({
               aria-label={`Voice for ${title}`}
               onChange={(e) => narrator.setChapterVoice(start, e.target.value)}
             >
-              {STUDIO_VOICES.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name} ({v.gender === "Female" ? "F" : "M"}, {v.accent === "British" ? "UK" : "US"})
-                </option>
+              {(["piper", "kokoro"] as const).map((engine) => (
+                <optgroup key={engine} label={engine === "piper" ? "Natural (fast)" : "Studio (best on computers)"}>
+                  {STUDIO_VOICES.filter((v) => v.engine === engine).map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name} ({v.gender === "Female" ? "F" : "M"}, {v.accent === "British" ? "UK" : "US"})
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </label>

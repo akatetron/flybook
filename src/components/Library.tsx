@@ -30,6 +30,29 @@ export function Library({ onOpen }: LibraryProps) {
   }, []);
   useEffect(refresh, [refresh]);
 
+  async function addSample() {
+    const { sampleBook, sampleCover } = await import("../lib/sample");
+    const book = sampleBook();
+    const id = newId();
+    const now = Date.now();
+    await saveBook(
+      {
+        id,
+        title: book.title,
+        fileName: "sample",
+        pageCount: book.chapters.length,
+        segmentCount: book.segments.length,
+        words: book.words,
+        cover: sampleCover(),
+        addedAt: now,
+        openedAt: now,
+        position: 0,
+      },
+      { id, segments: book.segments, chapters: book.chapters }
+    );
+    onOpen(id);
+  }
+
   async function onFile(file: File | undefined) {
     if (!file) return;
     setError(null);
@@ -146,6 +169,9 @@ export function Library({ onOpen }: LibraryProps) {
             <span className="drop-title">Add a PDF</span>
             <span className="muted small">From Files, iCloud Drive or Downloads</span>
           </label>
+          <button className="sample-btn" onClick={addSample}>
+            or try a short sample story
+          </button>
           <ul className="features">
             <li>
               <LockIcon />

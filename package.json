@@ -11,6 +11,7 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "dependencies": {
+    "@diffusionstudio/piper-wasm": "^1.0.0",
     "@huggingface/transformers": "^3.8.1",
     "idb": "^8.0.3",
     "kokoro-js": "^1.2.1",

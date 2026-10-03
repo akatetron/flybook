@@ -72,7 +72,7 @@ function setFlag(key: string, value = "1") {
 }
 
 /** What the GPU path can use on this device: none, or the model precision. */
-async function gpuMode(): Promise<"fp32" | "fp16" | null> {
+async function gpuMode(): Promise<"fp32" | null> {
   if (flag(NO_GPU_KEY)) return null;
   const gpu = (
     navigator as Navigator & { gpu?: { requestAdapter(): Promise<{ features: Set<string> } | null> } }
@@ -82,9 +82,10 @@ async function gpuMode(): Promise<"fp32" | "fp16" | null> {
     const adapter = await gpu.requestAdapter();
     if (!adapter) return null;
     const phone = isIOS() || /Android|Mobile/i.test(navigator.userAgent);
-    // Phones can't hold the full-precision model (Safari kills the page), but
-    // the half-precision one (~160 MB) fits and runs far faster than the CPU.
-    if (phone) return adapter.features.has("shader-f16") ? "fp16" : null;
+    // Phones: the full-precision model is too big for Safari (it kills the
+    // page), and the half-precision one produces distorted, unintelligible
+    // speech. Phones always use the clean 8-bit model on the CPU.
+    if (phone) return null;
     return "fp32";
   } catch {
     return null;
@@ -141,7 +142,7 @@ class KokoroClient {
 
   /** Download size for the next load, shown before asking to download. */
   get downloadLabel(): string {
-    return "about 90–160 MB";
+    return "about 90 MB";
   }
 
   /** The voice crashed this page before, even in its safest mode. */
@@ -161,6 +162,24 @@ class KokoroClient {
         setFlag(SINGLE_THREAD_KEY);
         setFlag(CRASHED_KEY);
       }
+    }
+    // Free the space of the half-precision model an earlier version downloaded
+    // on phones (it produced distorted speech and is no longer used).
+    void caches
+      ?.open("transformers-cache")
+      .then(async (cache) => {
+        for (const req of await cache.keys()) if (/model_fp16\.onnx/.test(req.url)) await cache.delete(req);
+      })
+      .catch(() => undefined);
+    // Free the space of the half-precision model an earlier version downloaded
+    // on phones (it produced distorted speech and is no longer used).
+    if (typeof caches !== "undefined") {
+      caches
+        .open("transformers-cache")
+        .then(async (cache) => {
+          for (const req of await cache.keys()) if (/model_fp16\.onnx/.test(req.url)) await cache.delete(req);
+        })
+        .catch(() => undefined);
     }
     // Leaving the page normally isn't a crash.
     const left = () => clear(ATTEMPT_KEY);

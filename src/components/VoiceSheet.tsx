@@ -1,30 +1,30 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Sheet } from "./Sheet";
 import { CheckIcon, PlayIcon, WaveIcon } from "./Icons";
-import { kokoro } from "../tts/kokoro";
-import { PREVIEW_TEXT, STUDIO_VOICES } from "../tts/voices";
+import { tts } from "../tts/engines";
+import { PREVIEW_TEXT, STUDIO_VOICES, isPhone, studioVoice, type StudioVoice } from "../tts/voices";
 import { systemSpeechSupported, useSystemVoices } from "../tts/system";
 import type { Engine, Settings } from "../lib/settings";
 
-export function useModelState() {
-  return useSyncExternalStore(
-    (fn) => kokoro.subscribe(fn),
-    () => kokoro.current
-  );
+/** Download/loading state of the engine behind a voice (re-renders on change). */
+export function useModelState(voice: string) {
+  useSyncExternalStore(tts.subscribe, () => tts.state(voice));
+  return tts.state(voice);
 }
 
 export function formatMB(bytes: number) {
   return `${Math.round(bytes / 1_000_000)} MB`;
 }
 
-export function ModelDownloadCard({ onStart }: { onStart?: () => void }) {
-  const model = useModelState();
+export function ModelDownloadCard({ voice }: { voice: string }) {
+  const model = useModelState(voice);
+  const v = studioVoice(voice);
   if (model.phase === "ready") return null;
   if (model.phase === "loading") {
     const pct = model.total ? Math.round((model.loaded / model.total) * 100) : 0;
     return (
       <div className="card model-card">
-        <p className="model-title">{kokoro.wasDownloaded() ? "Starting studio voices…" : "Downloading studio voices…"}</p>
+        <p className="model-title">{tts.wasDownloaded(voice) ? `Starting ${v.name}…` : `Downloading ${v.name}…`}</p>
         <div className="bar">
           <div className="bar-fill" style={{ width: `${pct}%` }} />
         </div>
@@ -37,23 +37,17 @@ export function ModelDownloadCard({ onStart }: { onStart?: () => void }) {
   return (
     <div className="card model-card">
       <p className="model-title">
-        <WaveIcon width={18} height={18} /> Studio voices
+        <WaveIcon width={18} height={18} /> {v.name}
       </p>
       <p className="muted small">
         {model.phase === "error"
           ? model.message
-          : kokoro.wasDownloaded()
-            ? "Ready on this device — loads in a few seconds."
-            : `Human-like narration that runs entirely on your phone. One-time download of ${kokoro.downloadLabel}; works offline after that.`}
+          : tts.wasDownloaded(voice)
+            ? "On this device — starts in a moment."
+            : `Runs entirely on your device. One-time download of ${tts.downloadLabel(voice)}; works offline after that.`}
       </p>
-      <button
-        className="btn primary"
-        onClick={() => {
-          kokoro.load().catch(() => undefined);
-          onStart?.();
-        }}
-      >
-        {model.phase === "error" ? "Try again" : kokoro.wasDownloaded() ? "Load voices" : "Download voices"}
+      <button className="btn primary" onClick={() => tts.load(voice).catch(() => undefined)}>
+        {model.phase === "error" ? "Try again" : tts.wasDownloaded(voice) ? "Load voice" : "Download voice"}
       </button>
     </div>
   );
@@ -72,7 +66,7 @@ export function VoiceSheet({ open, onClose, settings, onChange, onBeforePreview 
   const [previewing, setPreviewing] = useState<string | null>(null);
   const previewAudio = useRef<HTMLAudioElement | null>(null);
   const systemVoices = useSystemVoices();
-  const model = useModelState();
+  const phone = isPhone();
 
   useEffect(() => {
     if (open) setTab(settings.engine);
@@ -89,7 +83,7 @@ export function VoiceSheet({ open, onClose, settings, onChange, onBeforePreview 
     // Create/unlock the element inside the tap so iOS allows playback later.
     const audio = (previewAudio.current ??= new Audio());
     try {
-      const clip = await kokoro.generate(PREVIEW_TEXT, id);
+      const clip = await tts.generate(PREVIEW_TEXT, id);
       audio.src = clip.url;
       audio.onended = () => {
         URL.revokeObjectURL(clip.url);
@@ -115,62 +109,78 @@ export function VoiceSheet({ open, onClose, settings, onChange, onBeforePreview 
 
   const englishFirst = systemVoices.slice(0, 40);
 
+  const row = (v: StudioVoice) => {
+    const selected = settings.engine === "studio" && settings.studioVoice === v.id;
+    return (
+      <li key={v.id} className={selected ? "selected" : ""}>
+        <button className="voice-main" onClick={() => onChange({ engine: "studio", studioVoice: v.id })}>
+          <span className={`avatar ${v.gender === "Female" ? "f" : "m"}`}>{v.name[0]}</span>
+          <span className="voice-text">
+            <span className="voice-name">
+              {v.name} {selected && <CheckIcon width={16} height={16} />}
+            </span>
+            <span className="muted small">
+              {v.gender} · {v.accent === "British" ? "UK" : "US"} · {v.note}
+            </span>
+          </span>
+        </button>
+        <button
+          className="icon-btn preview"
+          aria-label={`Preview ${v.name}`}
+          disabled={previewing !== null}
+          onClick={() => previewStudio(v.id)}
+        >
+          {previewing === v.id ? <span className="spinner" /> : <PlayIcon width={16} height={16} />}
+        </button>
+      </li>
+    );
+  };
+  const natural = STUDIO_VOICES.filter((v) => v.engine === "piper");
+  const studio = STUDIO_VOICES.filter((v) => v.engine === "kokoro");
+
   return (
     <Sheet title="Voice" open={open} onClose={onClose}>
       <div className="segmented" role="tablist">
         <button role="tab" aria-selected={tab === "studio"} className={tab === "studio" ? "on" : ""} onClick={() => setTab("studio")}>
-          Studio voices
+          Natural &amp; studio
         </button>
         <button role="tab" aria-selected={tab === "system"} className={tab === "system" ? "on" : ""} onClick={() => setTab("system")}>
-          Phone voices
+          {phone ? "Phone voices" : "System voices"}
         </button>
       </div>
 
       {tab === "studio" ? (
         <>
-          <ModelDownloadCard />
-          <p className="muted small hint">Studio voices read English. For other languages use a phone voice.</p>
-          <ul className="voice-list">
-            {STUDIO_VOICES.map((v) => {
-              const selected = settings.engine === "studio" && settings.studioVoice === v.id;
-              return (
-                <li key={v.id} className={selected ? "selected" : ""}>
-                  <button className="voice-main" onClick={() => onChange({ engine: "studio", studioVoice: v.id })}>
-                    <span className={`avatar ${v.gender === "Female" ? "f" : "m"}`}>{v.name[0]}</span>
-                    <span className="voice-text">
-                      <span className="voice-name">
-                        {v.name} {selected && <CheckIcon width={16} height={16} />}
-                      </span>
-                      <span className="muted small">
-                        {v.gender} · {v.accent} · {v.note}
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    className="icon-btn preview"
-                    aria-label={`Preview ${v.name}`}
-                    disabled={model.phase !== "ready" || previewing !== null}
-                    onClick={() => previewStudio(v.id)}
-                  >
-                    {previewing === v.id ? <span className="spinner" /> : <PlayIcon width={16} height={16} />}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          {settings.engine === "studio" && <ModelDownloadCard voice={settings.studioVoice} />}
+          <p className="voice-group">
+            Natural voices <span className="tag">{phone ? "Recommended on this phone" : "Fast"}</span>
+          </p>
+          <p className="muted small hint">
+            Made on your device, faster than real time even on phones. About 60 MB per voice, downloaded once.
+          </p>
+          <ul className="voice-list">{natural.map(row)}</ul>
+          <p className="voice-group">
+            Studio voices <span className="tag">{phone ? "Slow on phones" : "Most natural"}</span>
+          </p>
+          <p className="muted small hint">
+            The most lifelike voices — best on a computer. On phones they're slower than real time; prepare chapters
+            ahead to use them.
+          </p>
+          <ul className="voice-list">{studio.map(row)}</ul>
         </>
       ) : !systemSpeechSupported || englishFirst.length === 0 ? (
-        <p className="muted">This browser doesn't offer built-in voices. Use studio voices instead.</p>
+        <p className="muted">This browser doesn't offer built-in voices. Use natural voices instead.</p>
       ) : (
         <>
           <p className="muted small hint">
-            Instant, no download. Voices marked “Enhanced”, “Premium” or “Natural” sound best — on iPhone you can
-            add more in Settings → Accessibility → Spoken Content → Voices.
+            Instant, no download. Voices marked “Enhanced”, “Premium” or “Natural” sound best — on iPhone you can add
+            more in Settings → Accessibility → Spoken Content → Voices. Note: these stop when the screen locks.
           </p>
           <ul className="voice-list">
             {englishFirst.map((v) => {
               const selected =
-                settings.engine === "system" && (settings.systemVoice === v.voiceURI || (!settings.systemVoice && v === englishFirst[0]));
+                settings.engine === "system" &&
+                (settings.systemVoice === v.voiceURI || (!settings.systemVoice && v === englishFirst[0]));
               return (
                 <li key={v.voiceURI} className={selected ? "selected" : ""}>
                   <button className="voice-main" onClick={() => onChange({ engine: "system", systemVoice: v.voiceURI })}>
