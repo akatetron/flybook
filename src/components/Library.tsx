@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { deleteBook, listBooks, newId, saveBook, type BookMeta } from "../lib/db";
+import { deleteBookAudio } from "../lib/audioStore";
 import { LockIcon, MoreIcon, OfflineIcon, PlayIcon, PlusIcon, WaveIcon } from "./Icons";
 import { WORDS_PER_MINUTE, formatDuration } from "../lib/format";
 
@@ -78,11 +79,23 @@ export function Library({ onOpen }: LibraryProps) {
   async function remove(book: BookMeta) {
     setMenuFor(null);
     if (!confirm(`Remove “${book.title}” from this device?`)) return;
-    await deleteBook(book.id);
+    await Promise.all([deleteBook(book.id), deleteBookAudio(book.id)]);
     refresh();
   }
 
   const pct = importing?.total ? Math.round((importing.done / importing.total) * 100) : 0;
+  const progressOf = (b: BookMeta) => (b.segmentCount > 1 ? b.position / (b.segmentCount - 1) : 0);
+  const filePicker = (
+    <input
+      ref={input}
+      type="file"
+      accept="application/pdf,.pdf"
+      onChange={(e) => onFile(e.target.files?.[0])}
+      disabled={!!importing}
+    />
+  );
+  const hasBooks = !!books && books.length > 0;
+  const latest = hasBooks ? books![0] : null;
 
   return (
     <div className="library">
@@ -93,21 +106,13 @@ export function Library({ onOpen }: LibraryProps) {
           </span>
           <h1>Flybook</h1>
         </div>
-        <p>
-          Turn any PDF into an <span className="grad-text">audiobook</span> — right on your phone.
-        </p>
+        {hasBooks && (
+          <label className="add-round" aria-label="Add a PDF">
+            {filePicker}
+            <PlusIcon />
+          </label>
+        )}
       </header>
-
-      <label className="add-btn">
-        <input
-          ref={input}
-          type="file"
-          accept="application/pdf,.pdf"
-          onChange={(e) => onFile(e.target.files?.[0])}
-          disabled={!!importing}
-        />
-        <PlusIcon /> Add a PDF
-      </label>
 
       {error && (
         <div className="alert" role="alert">
@@ -127,101 +132,113 @@ export function Library({ onOpen }: LibraryProps) {
         </div>
       )}
 
-      {books && books.length > 0 && (() => {
-        const [latest] = books;
-        const progress = latest.segmentCount > 1 ? latest.position / (latest.segmentCount - 1) : 0;
-        return (
-          <>
-            <p className="section-label">Continue listening</p>
-            <button className="hero" onClick={() => onOpen(latest.id)}>
-              {latest.cover ? (
-                <img className="cover" src={latest.cover} alt="" />
-              ) : (
-                <span className="cover placeholder">{latest.title.slice(0, 1)}</span>
-              )}
-              <span className="hero-info">
-                <span className="hero-title">{latest.title}</span>
-                <span className="muted small">
-                  {Math.round(progress * 100)}% · {formatDuration((latest.words * (1 - progress)) / WORDS_PER_MINUTE)} left
-                </span>
-                <span className="bar thin">
-                  <span className="bar-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
-                </span>
-              </span>
-              <span className="hero-play" aria-hidden>
-                <PlayIcon width={24} height={24} />
-              </span>
-            </button>
-          </>
-        );
-      })()}
-
-      {books && books.length > 0 && (
-        <p className="section-label">Your library · {books.length}</p>
-      )}
-
-      {books && books.length > 0 && (
-        <ul className="book-list">
-          {books.map((b) => {
-            const progress = b.segmentCount > 1 ? b.position / (b.segmentCount - 1) : 0;
-            const left = (b.words * (1 - progress)) / WORDS_PER_MINUTE;
-            return (
-              <li key={b.id} className="book">
-                <button className="book-main" onClick={() => onOpen(b.id)}>
-                  {b.cover ? (
-                    <img className="cover" src={b.cover} alt="" />
-                  ) : (
-                    <span className="cover placeholder">{b.title.slice(0, 1)}</span>
-                  )}
-                  <span className="book-info">
-                    <span className="book-title">{b.title}</span>
-                    <span className="muted small">
-                      {b.pageCount} pages · {progress > 0 ? `${formatDuration(left)} left` : formatDuration(b.words / WORDS_PER_MINUTE)}
-                    </span>
-                    <span className="bar thin">
-                      <span className="bar-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
-                    </span>
-                  </span>
-                </button>
-                <button className="icon-btn" aria-label={`Options for ${b.title}`} onClick={() => setMenuFor(menuFor === b.id ? null : b.id)}>
-                  <MoreIcon />
-                </button>
-                {menuFor === b.id && (
-                  <div className="menu">
-                    <button onClick={() => remove(b)}>Remove from device</button>
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
       {books && books.length === 0 && !importing && (
-        <ul className="features">
-          <li>
-            <LockIcon />
-            <span>
-              <strong>Private.</strong> Your PDFs never leave this device — no account, no uploads.
+        <section className="welcome">
+          <h2>
+            Turn any PDF into an <span className="grad-text">audiobook</span>.
+          </h2>
+          <p className="muted">Pick a PDF from your phone — it's read aloud with natural voices, right here.</p>
+          <label className="drop">
+            {filePicker}
+            <span className="drop-icon">
+              <PlusIcon />
             </span>
-          </li>
-          <li>
-            <WaveIcon />
-            <span>
-              <strong>Natural voices.</strong> Studio-quality narration generated on your phone, or use its built-in
-              voices instantly.
-            </span>
-          </li>
-          <li>
-            <OfflineIcon />
-            <span>
-              <strong>Works offline.</strong> Picks up where you left off, with lock-screen controls and a sleep timer.
-            </span>
-          </li>
-        </ul>
+            <span className="drop-title">Add a PDF</span>
+            <span className="muted small">From Files, iCloud Drive or Downloads</span>
+          </label>
+          <ul className="features">
+            <li>
+              <LockIcon />
+              <span>
+                <strong>Private</strong>
+                <span className="muted small">Nothing is uploaded. No account.</span>
+              </span>
+            </li>
+            <li>
+              <WaveIcon />
+              <span>
+                <strong>Natural voices</strong>
+                <span className="muted small">Made on your phone, saved for offline.</span>
+              </span>
+            </li>
+            <li>
+              <OfflineIcon />
+              <span>
+                <strong>Picks up where you left off</strong>
+                <span className="muted small">Lock-screen controls and a sleep timer.</span>
+              </span>
+            </li>
+          </ul>
+        </section>
       )}
 
-      {isIosBrowserTab() && books && books.length > 0 && (
+      {latest && (
+        <button className="hero" onClick={() => onOpen(latest.id)}>
+          {latest.cover ? (
+            <img className="cover" src={latest.cover} alt="" />
+          ) : (
+            <span className="cover placeholder">{latest.title.slice(0, 1)}</span>
+          )}
+          <span className="hero-info">
+            <span className="eyebrow">Continue listening</span>
+            <span className="hero-title">{latest.title}</span>
+            <span className="muted small">
+              {formatDuration((latest.words * (1 - progressOf(latest))) / WORDS_PER_MINUTE)} left
+            </span>
+            <span className="bar thin">
+              <span className="bar-fill" style={{ width: `${Math.round(progressOf(latest) * 100)}%` }} />
+            </span>
+          </span>
+          <span className="hero-play" aria-hidden>
+            <PlayIcon width={24} height={24} />
+          </span>
+        </button>
+      )}
+
+      {hasBooks && (
+        <>
+          <p className="section-label">Library · {books!.length}</p>
+          <ul className="shelf">
+            {books!.map((b) => {
+              const progress = progressOf(b);
+              return (
+                <li key={b.id} className="shelf-item">
+                  <button className="shelf-main" onClick={() => onOpen(b.id)}>
+                    <span className="shelf-cover">
+                      {b.cover ? <img src={b.cover} alt="" /> : <span className="cover-fallback">{b.title}</span>}
+                      <span className="shelf-progress">
+                        <span style={{ width: `${Math.round(progress * 100)}%` }} />
+                      </span>
+                    </span>
+                    <span className="shelf-title">{b.title}</span>
+                    <span className="muted small">
+                      {progress > 0.995
+                        ? "Finished"
+                        : progress > 0
+                          ? `${Math.round(progress * 100)}% · ${formatDuration((b.words * (1 - progress)) / WORDS_PER_MINUTE)} left`
+                          : formatDuration(b.words / WORDS_PER_MINUTE)}
+                    </span>
+                  </button>
+                  <button
+                    className="shelf-more"
+                    aria-label={`Options for ${b.title}`}
+                    onClick={() => setMenuFor(menuFor === b.id ? null : b.id)}
+                  >
+                    <MoreIcon width={18} height={18} />
+                  </button>
+                  {menuFor === b.id && (
+                    <div className="menu">
+                      <button onClick={() => remove(b)}>Remove from phone</button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+
+      {isIosBrowserTab() && hasBooks && (
         <p className="muted small tip">
           Tip: tap Share → “Add to Home Screen”. Safari may clear a website's saved books after a week without visits; a
           home-screen app keeps them.

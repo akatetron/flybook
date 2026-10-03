@@ -69,6 +69,7 @@ function ReaderView({
   const narrator = useMemo(
     () =>
       new Narrator({
+        bookId: meta.id,
         title: meta.title,
         cover: meta.cover,
         segments,
@@ -126,6 +127,7 @@ function ReaderView({
   // ---------- sheets ----------
   const [sheet, setSheet] = useState<null | "voice" | "chapters" | "speed" | "sleep" | "text" | "model">(null);
   const closeSheet = useCallback(() => setSheet(null), []);
+  const [view, setView] = useState<"listen" | "read">("listen");
 
   function togglePlay() {
     if (
@@ -213,8 +215,15 @@ function ReaderView({
   }, []);
 
   useEffect(() => {
-    if (follow) scrollToCurrent(true);
-  }, [index, follow, win.from, scrollToCurrent]);
+    if (follow && view === "read") scrollToCurrent(true);
+  }, [index, follow, win.from, scrollToCurrent, view]);
+
+  useLayoutEffect(() => {
+    if (view === "read") {
+      setFollow(true);
+      scrollToCurrent(false);
+    }
+  }, [view, scrollToCurrent]);
 
   const stopFollowing = () => setFollow(false);
 
@@ -296,39 +305,82 @@ function ReaderView({
         {"until" in state.sleep ? <SleepCountdown until={state.sleep.until} /> : "Sleeping at end of chapter"}
       </span>
     );
-  } else if (settings.engine === "studio" && state.ahead >= 1) {
+  } else if (settings.engine === "studio" && (state.ahead >= 1 || state.chapterReady > 0)) {
     const secs = Math.round(state.ahead);
-    status = (
-      <span className="status quiet">
-        {secs >= 60 ? `${Math.floor(secs / 60)} min ${secs % 60}s` : `${secs}s`} of audio ready ahead
-      </span>
-    );
+    const ahead = secs >= 60 ? `${Math.floor(secs / 60)} min ready ahead` : secs >= 1 ? `${secs}s ready ahead` : "";
+    const chapter =
+      state.chapterReady >= 0.999 ? "Chapter fully prepared" : `Chapter ${Math.floor(state.chapterReady * 100)}% prepared`;
+    status = <span className="status quiet">{ahead ? `${chapter} · ${ahead}` : chapter}</span>;
   }
 
   const voiceLabel =
     settings.engine === "studio" ? studioVoice(settings.studioVoice).name : findSystemVoice(settings.systemVoice)?.name ?? "Phone voice";
 
+  const chapterTitle = chapters[chapterIndex]?.title;
+  const current = segments[index]?.t ?? "";
+  const upcoming = segments[index + 1]?.t ?? "";
+
   return (
-    <div className="reader" style={{ ["--text-size" as string]: `${settings.textSize}px` }}>
+    <div className={`reader view-${view}`} style={{ ["--text-size" as string]: `${settings.textSize}px` }}>
       <header className="reader-head">
         <button className="icon-btn" onClick={onBack} aria-label="Back to library">
           <BackIcon />
         </button>
-        <div className="reader-title">
-          <span className="title-line">{meta.title}</span>
-          <span className="muted small title-line">{chapters[chapterIndex]?.title}</span>
+        <div className="segmented view-switch" role="tablist" aria-label="View">
+          <button role="tab" aria-selected={view === "listen"} className={view === "listen" ? "on" : ""} onClick={() => setView("listen")}>
+            Listen
+          </button>
+          <button role="tab" aria-selected={view === "read"} className={view === "read" ? "on" : ""} onClick={() => setView("read")}>
+            Read
+          </button>
         </div>
-        <button className="icon-btn" onClick={() => setSheet("text")} aria-label="Text size">
-          <TextSizeIcon />
-        </button>
+        {view === "read" ? (
+          <button className="icon-btn" onClick={() => setSheet("text")} aria-label="Text size">
+            <TextSizeIcon />
+          </button>
+        ) : (
+          <span className="icon-btn spacer" aria-hidden />
+        )}
         <button className="icon-btn" onClick={() => setSheet("chapters")} aria-label="Chapters">
           <ListIcon />
         </button>
       </header>
 
+      {view === "listen" && (
+        <main className={`listen ${settings.engine === "studio" && state.slow && !state.error ? "has-hint" : ""}`}>
+          <div className="np-art">
+            {meta.cover ? <img src={meta.cover} alt="" /> : <span className="np-art-fallback">{meta.title}</span>}
+          </div>
+          <div className="np-meta">
+            <h1 className="np-title">{meta.title}</h1>
+            {chapterTitle && (
+              <button className="np-chapter" onClick={() => setSheet("chapters")}>
+                {chapterTitle}
+              </button>
+            )}
+          </div>
+          <button className="np-caption" onClick={() => setView("read")} aria-label="Open the text">
+            <span className="np-now">{current}</span>
+            {upcoming && <span className="np-next">{upcoming}</span>}
+          </button>
+          {settings.engine === "studio" && state.slow && !state.error && (
+            <div className="np-hint">
+              <p>
+                This phone makes the studio voice slower than it plays. Pause for a minute to let it get ahead, or pick
+                an iPhone voice for instant playback.
+              </p>
+              <button className="link" onClick={() => setSheet("voice")}>
+                Choose voice
+              </button>
+            </div>
+          )}
+        </main>
+      )}
+
       <div
         className="reading"
         ref={scroller}
+        hidden={view !== "read"}
         onTouchMove={stopFollowing}
         onWheel={stopFollowing}
         onClick={onTextClick}
@@ -352,7 +404,7 @@ function ReaderView({
         <div ref={bottomSentinel} className="sentinel" />
       </div>
 
-      {!follow && (
+      {view === "read" && !follow && (
         <button
           className="follow-pill"
           onClick={() => {
@@ -378,9 +430,9 @@ function ReaderView({
             onKeyUp={commitScrub}
             style={{ ["--pct" as string]: `${(shown / Math.max(1, segments.length - 1)) * 100}%` }}
           />
-          <div className="scrub-labels muted small">
+          <div className="scrub-labels">
             <span>
-              Page {segments[shown]?.p ?? 1} of {meta.pageCount} · {percent}%
+              p. {segments[shown]?.p ?? 1}/{meta.pageCount} · {percent}%
             </span>
             <span>{formatDuration(minutesLeft)} left</span>
           </div>
@@ -389,33 +441,28 @@ function ReaderView({
         <div className="status-row">{status}</div>
 
         <div className="controls">
-          <button className="chip" onClick={() => setSheet("speed")} aria-label="Playback speed">
-            {settings.speed}×
+          <button className="ctl-side" onClick={() => setSheet("speed")} aria-label="Playback speed">
+            <span className="ctl-speed">{settings.speed}×</span>
           </button>
           <button className="icon-btn big" onClick={() => narrator.prev()} aria-label="Previous sentence">
             <PrevIcon />
           </button>
-          <PlayButton
-            playing={state.playing}
-            busy={state.playing && state.buffering}
-            progress={shown / Math.max(1, segments.length - 1)}
-            onClick={togglePlay}
-          />
+          <PlayButton playing={state.playing} busy={state.playing && state.buffering} onClick={togglePlay} />
           <button className="icon-btn big" onClick={() => narrator.next()} aria-label="Next sentence">
             <NextIcon />
           </button>
           <button
-            className={`chip ${state.sleep ? "active" : ""}`}
+            className={`ctl-side ${state.sleep ? "active" : ""}`}
             onClick={() => setSheet("sleep")}
             aria-label="Sleep timer"
           >
-            <MoonIcon width={18} height={18} />
+            <MoonIcon width={20} height={20} />
           </button>
         </div>
 
         <button className="voice-chip" onClick={() => setSheet("voice")}>
-          <MicIcon width={16} height={16} /> {voiceLabel}
-          <span className="muted"> · {settings.engine === "studio" ? "Studio" : "Phone"} voice</span>
+          <MicIcon width={15} height={15} /> {voiceLabel}
+          <span className="voice-kind">{settings.engine === "studio" ? "Studio" : "iPhone / phone"} voice</span>
         </button>
       </footer>
 
@@ -537,28 +584,13 @@ function ReaderView({
   );
 }
 
-function PlayButton({ playing, busy, progress, onClick }: { playing: boolean; busy: boolean; progress: number; onClick: () => void }) {
-  const size = 72;
-  const stroke = 3;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
+function PlayButton({ playing, busy, onClick }: { playing: boolean; busy: boolean; onClick: () => void }) {
   return (
     <button className={`play ${busy ? "busy" : ""}`} onClick={onClick} aria-label={playing ? "Pause" : "Play"}>
-      <svg width={size} height={size} className="play-ring" aria-hidden>
-        <circle cx={size / 2} cy={size / 2} r={r} className="ring-bg" strokeWidth={stroke} fill="none" />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          className="ring-fg"
-          strokeWidth={stroke}
-          fill="none"
-          strokeLinecap="round"
-          strokeDasharray={busy ? `${c * 0.25} ${c}` : c}
-          strokeDashoffset={busy ? 0 : c * (1 - Math.min(1, Math.max(0, progress)))}
-        />
-      </svg>
-      <span className="play-core">{playing ? <PauseIcon width={28} height={28} /> : <PlayIcon width={28} height={28} />}</span>
+      {busy && <span className="play-spin" aria-hidden />}
+      <span className="play-core">
+        {playing ? <PauseIcon width={30} height={30} /> : <PlayIcon width={30} height={30} />}
+      </span>
     </button>
   );
 }

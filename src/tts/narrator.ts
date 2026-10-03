@@ -1,10 +1,15 @@
-// Plays a book sentence by sentence. With studio voices it keeps a few
-// minutes of audio prepared ahead in the background (also while paused) so
-// playback doesn't stop to buffer; with system voices it hands each sentence
-// to the phone's speech engine.
+// Plays a book sentence by sentence.
+//
+// Studio voices: every generated sentence is saved on the device, and while
+// the book is open the rest of the current chapter keeps being prepared in
+// the background (also while paused). Playback reads from what's prepared, so
+// once a stretch is ready it never stops to buffer, and replaying or reopening
+// a book is instant. System voices hand each sentence to the phone's speech
+// engine.
 import type { Chapter, Segment } from "../lib/text";
 import { speakable } from "../lib/text";
 import type { Engine } from "../lib/settings";
+import { loadClip, saveClip, savedLengths } from "../lib/audioStore";
 import { kokoro, type Clip } from "./kokoro";
 import { findSystemVoice } from "./system";
 
@@ -12,14 +17,19 @@ export interface NarratorState {
   index: number;
   playing: boolean;
   buffering: boolean;
-  /** Seconds of audio prepared ahead of the current position (studio voices). */
+  /** Seconds of audio ready ahead of the current position (studio voices). */
   ahead: number;
+  /** Share of the current chapter that's prepared, 0–1 (studio voices). */
+  chapterReady: number;
+  /** This device makes speech slower than it plays. */
+  slow: boolean;
   finished: boolean;
   error: string | null;
   sleep: { until: number } | { chapterEnd: true } | null;
 }
 
 export interface NarratorOptions {
+  bookId: string;
   title: string;
   cover: string | null;
   segments: Segment[];
@@ -32,13 +42,10 @@ export interface NarratorOptions {
   onPosition: (index: number) => void;
 }
 
-/** Keep generating until this much audio is ready ahead of the listener. */
-const AHEAD_SECONDS = 180;
-/** …but never more than this many sentences (bounds memory). */
-const MAX_AHEAD = 80;
-/** After running dry, wait for this cushion before resuming, so one short
- *  pause replaces a stutter at every sentence. */
-const RESUME_CUSHION_SECONDS = 15;
+/** Sentences kept decoded in memory around the listener. */
+const MEMORY_WINDOW = 12;
+/** Always prepare at least this many sentences ahead, even past a chapter end. */
+const MIN_PREPARE = 60;
 
 // A tiny silent WAV, played synchronously inside the first tap so iOS lets
 // the same <audio> element play later without another tap.
@@ -53,11 +60,15 @@ export class Narrator {
 
   /** Bumped whenever what should be playing changes; stale async work checks it. */
   private token = 0;
-  /** Bumped when the voice changes; clips from an old voice are discarded. */
+  /** Bumped when the voice changes; work for an old voice is discarded. */
   private voiceGen = 0;
+  /** Playable audio in memory, by sentence index (null = sentence failed, skip it). */
   private cache = new Map<number, Clip | null>();
-  private inflight: number | null = null;
-  private waiters = new Map<number, ((clip: Clip | null) => void)[]>();
+  /** Seconds of each sentence saved on the device for the current voice. */
+  private saved = new Map<number, number>();
+  private savedReady = false;
+  private busy = false;
+  private waiters = new Map<number, (() => void)[]>();
   private loadedIndex = -1;
   private switchingSrc = false;
   private unlocked = false;
@@ -66,7 +77,17 @@ export class Narrator {
   constructor(opts: NarratorOptions) {
     this.opts = opts;
     const start = Math.min(Math.max(0, opts.start), Math.max(0, opts.segments.length - 1));
-    this.state = { index: start, playing: false, buffering: false, ahead: 0, finished: false, error: null, sleep: null };
+    this.state = {
+      index: start,
+      playing: false,
+      buffering: false,
+      ahead: 0,
+      chapterReady: 0,
+      slow: false,
+      finished: false,
+      error: null,
+      sleep: null,
+    };
     this.audio.preload = "auto";
     this.audio.addEventListener("ended", () => {
       if (this.state.playing) this.advance();
@@ -74,16 +95,21 @@ export class Narrator {
     this.audio.addEventListener("pause", () => {
       // Paused by the OS (headphones unplugged, phone call, lock-screen button).
       setTimeout(() => {
-        if (!this.switchingSrc && this.audio.paused && !this.audio.ended && this.state.playing && !this.state.buffering && this.opts.engine === "studio") {
+        if (
+          !this.switchingSrc &&
+          this.audio.paused &&
+          !this.audio.ended &&
+          this.state.playing &&
+          !this.state.buffering &&
+          this.opts.engine === "studio"
+        ) {
           this.token++;
           this.emit({ playing: false });
         }
       }, 0);
     });
     this.setupMediaSession();
-    // Voices already on this device: start preparing audio right away, so
-    // pressing play is instant and there's a head start before listening.
-    if (opts.engine === "studio" && kokoro.wasDownloaded()) this.pump();
+    this.loadSaved();
   }
 
   // ---------- subscription (for React's useSyncExternalStore) ----------
@@ -113,7 +139,10 @@ export class Narrator {
       this.unlocked = true;
       this.switchingSrc = true;
       this.audio.src = SILENCE;
-      this.audio.play().catch(() => undefined).finally(() => (this.switchingSrc = false));
+      this.audio
+        .play()
+        .catch(() => undefined)
+        .finally(() => (this.switchingSrc = false));
     }
     const restart = this.state.finished;
     this.emit({ playing: true, error: null, finished: false, ...(restart ? { index: 0 } : {}) });
@@ -131,6 +160,7 @@ export class Narrator {
 
   pause() {
     this.token++;
+    this.notify();
     this.emit({ playing: false, buffering: false });
     this.audio.pause();
     if (this.opts.engine === "system") {
@@ -175,9 +205,12 @@ export class Narrator {
     if (!changed) return;
     if (this.opts.engine === "system") speechSynthesis.cancel();
     this.audio.pause();
+    const voiceChanged = studioVoice !== this.opts.studioVoice;
     this.opts = { ...this.opts, engine, studioVoice, systemVoice };
-    this.clearCache();
+    this.clearMemory();
+    if (voiceChanged) this.loadSaved();
     if (this.state.playing) this.playCurrent();
+    else this.pump();
   }
 
   setSleep(sleep: NarratorState["sleep"]) {
@@ -194,7 +227,7 @@ export class Narrator {
 
   destroy() {
     this.pause();
-    this.clearCache();
+    this.clearMemory();
     if (this.sleepTimer) clearTimeout(this.sleepTimer);
     this.audio.removeAttribute("src");
     this.audio.load();
@@ -206,31 +239,36 @@ export class Narrator {
 
   private async playCurrent() {
     const token = ++this.token;
+    this.notify(); // lets waits from the previous position finish
     const index = this.state.index;
-    const segment = this.opts.segments[index];
-    if (!segment) return;
+    if (!this.opts.segments[index]) return;
 
     if (this.opts.engine === "system") {
       this.speakSystem(index, token);
       return;
     }
 
-    let clip = this.cache.get(index);
-    if (clip === undefined) {
+    if (!this.cache.has(index)) {
       this.emit({ buffering: true });
       this.pump();
-      clip = await this.waitFor(index);
+      await this.waitUntil(token, () => this.cache.has(index) || !!this.state.error);
       if (token !== this.token) return;
-      // Ran dry: build a small cushion before resuming.
-      while (this.readyAhead(index).seconds < RESUME_CUSHION_SECONDS) {
-        const next = this.readyAhead(index).end;
-        if (next >= this.opts.segments.length || this.state.error) break;
-        await this.waitFor(next);
+      // Ran dry (not just loading saved audio): build a cushion sized to how
+      // fast this device is, so playback then runs on without stopping.
+      if (!this.saved.has(index)) {
+        const cushion = this.cushionSeconds();
+        await this.waitUntil(token, () => {
+          const r = this.readyAhead(index);
+          return r.seconds >= cushion || r.end >= this.opts.segments.length || !!this.state.error;
+        });
+        if (token !== this.token) return;
+        await this.waitUntil(token, () => this.cache.has(index) || !!this.state.error);
         if (token !== this.token) return;
       }
     }
     this.emit({ buffering: false });
-    if (clip === null) {
+    const clip = this.cache.get(index);
+    if (!clip) {
       if (this.state.error) this.emit({ playing: false });
       else this.advance();
       return;
@@ -288,94 +326,199 @@ export class Narrator {
     this.playCurrent();
   }
 
-  // ---------- studio voice buffering ----------
+  // ---------- studio voice: preparing audio ----------
 
-  private waitFor(index: number): Promise<Clip | null> {
+  /** Resolves once `ready()` is true (re-checked whenever new audio is
+   *  ready), or as soon as playback moves on (`token` is stale). */
+  private waitUntil(token: number, ready: () => boolean): Promise<void> {
+    if (ready()) return Promise.resolve();
     return new Promise((resolve) => {
-      const list = this.waiters.get(index) ?? [];
-      list.push(resolve);
-      this.waiters.set(index, list);
+      const check = () => {
+        if (token !== this.token || ready()) resolve();
+        else this.onProgress(check);
+      };
+      this.onProgress(check);
     });
   }
 
-  /** Seconds of contiguous prepared audio from `from`, and the first index not ready. */
+  private onProgress(fn: () => void) {
+    const list = this.waiters.get(0) ?? [];
+    list.push(fn);
+    this.waiters.set(0, list);
+  }
+
+  private notify() {
+    const list = this.waiters.get(0) ?? [];
+    this.waiters.delete(0);
+    list.forEach((fn) => fn());
+  }
+
+  /** How much audio to have ready before resuming after running dry. */
+  private cushionSeconds(): number {
+    const rtf = kokoro.realTimeFactor;
+    if (rtf === null) return 8;
+    if (rtf <= 0.85) return 4;
+    // Slower than real time: a bigger cushion buys a longer stretch of
+    // uninterrupted listening per wait.
+    return Math.min(90, 20 * rtf);
+  }
+
+  private isReady(i: number) {
+    return this.cache.has(i) || this.saved.has(i);
+  }
+
+  private secondsOf(i: number) {
+    return this.cache.get(i)?.seconds ?? this.saved.get(i) ?? 0;
+  }
+
+  /** Seconds of contiguous ready audio from `from`, and the first index not ready. */
   private readyAhead(from: number): { seconds: number; end: number } {
     let seconds = 0;
     let i = from;
-    while (i < this.opts.segments.length && this.cache.has(i)) {
-      seconds += this.cache.get(i)?.seconds ?? 0;
+    while (i < this.opts.segments.length && this.isReady(i)) {
+      seconds += this.secondsOf(i);
       i++;
     }
     return { seconds, end: i };
   }
 
-  /** Generates the next missing sentence until enough audio is ready ahead. */
-  private pump() {
-    if (this.opts.engine !== "studio" || this.inflight !== null) return;
-    const { index } = this.state;
-    const { seconds, end } = this.readyAhead(index);
-    if (Math.abs(seconds - this.state.ahead) >= 1) this.emit({ ahead: seconds });
-    const enough = seconds >= AHEAD_SECONDS || end > index + MAX_AHEAD;
-    const target = !enough && end < this.opts.segments.length ? end : -1;
-    this.evict();
-    if (target === -1) return;
+  /** The chapter around `index` as [start, end). */
+  private chapterBounds(index: number): [number, number] {
+    let start = 0;
+    let end = this.opts.segments.length;
+    for (const c of this.opts.chapters) {
+      if (c.start <= index) start = c.start;
+      else {
+        end = c.start;
+        break;
+      }
+    }
+    return [start, end];
+  }
 
+  /** Generating needs the voice model; never start its download unasked. */
+  private canGenerate() {
+    return kokoro.wasDownloaded() || kokoro.current.phase !== "idle" || this.state.playing;
+  }
+
+  private async loadSaved() {
     const gen = this.voiceGen;
-    this.inflight = target;
-    kokoro
-      .generate(speakable(this.opts.segments[target]), this.opts.studioVoice)
-      .then((clip) => {
-        if (gen !== this.voiceGen) {
-          URL.revokeObjectURL(clip.url);
-          return;
-        }
-        this.store(target, clip);
-      })
-      .catch((err: Error) => {
-        if (gen !== this.voiceGen) return;
-        if (kokoro.current.phase === "error") {
-          // The engine itself failed to load — stop and tell the user.
-          this.emit({ error: err.message });
-          this.waiters.forEach((list) => list.forEach((fn) => fn(null)));
-          this.waiters.clear();
-          return;
-        }
-        // One odd sentence failed: skip it rather than stopping the book.
-        this.store(target, null);
-      })
+    this.savedReady = false;
+    this.saved = new Map();
+    const lengths = await savedLengths(this.opts.bookId, this.opts.studioVoice);
+    if (gen !== this.voiceGen) return;
+    this.saved = lengths;
+    this.savedReady = true;
+    this.pump();
+  }
+
+  /** Does the next piece of work: load saved audio into memory, or generate. */
+  private pump() {
+    if (this.opts.engine !== "studio" || this.busy || !this.savedReady || this.state.error) return;
+    const { index } = this.state;
+    const n = this.opts.segments.length;
+    this.evict();
+    this.report();
+
+    // 1. Sentences about to play: get them into memory (from saved audio when possible).
+    for (let i = index; i < Math.min(n, index + MEMORY_WINDOW); i++) {
+      if (this.cache.has(i)) continue;
+      if (this.saved.has(i)) return void this.run(() => this.loadFromSaved(i));
+      if (!this.canGenerate()) return;
+      return void this.run(() => this.generate(i, true));
+    }
+
+    // 2. Background: prepare the rest of this chapter (at least MIN_PREPARE ahead).
+    if (!this.canGenerate()) return;
+    const [, chapterEnd] = this.chapterBounds(index);
+    const until = Math.min(n, Math.max(chapterEnd, index + MIN_PREPARE));
+    for (let i = index; i < until; i++) {
+      if (!this.isReady(i)) return void this.run(() => this.generate(i, false));
+    }
+  }
+
+  private run(job: () => Promise<void>) {
+    const gen = this.voiceGen;
+    this.busy = true;
+    job()
+      .catch(() => undefined)
       .finally(() => {
-        if (gen === this.voiceGen) {
-          this.inflight = null;
-          if (!this.state.error) this.pump();
-        }
+        if (gen !== this.voiceGen) return;
+        this.busy = false;
+        this.notify();
+        this.pump();
       });
   }
 
-  private store(index: number, clip: Clip | null) {
-    this.cache.set(index, clip);
-    const list = this.waiters.get(index);
-    this.waiters.delete(index);
-    list?.forEach((fn) => fn(clip));
+  private async loadFromSaved(i: number) {
+    const gen = this.voiceGen;
+    const blob = await loadClip(this.opts.bookId, this.opts.studioVoice, i);
+    if (gen !== this.voiceGen) return;
+    if (!blob) {
+      this.saved.delete(i); // was cleaned up to free space; generate it again
+      return;
+    }
+    this.cache.set(i, { url: URL.createObjectURL(blob), blob, seconds: this.saved.get(i) ?? 0 });
+  }
+
+  private async generate(i: number, keepInMemory: boolean) {
+    const gen = this.voiceGen;
+    const voice = this.opts.studioVoice;
+    try {
+      const clip = await kokoro.generate(speakable(this.opts.segments[i]), voice);
+      if (gen !== this.voiceGen) {
+        URL.revokeObjectURL(clip.url);
+        return;
+      }
+      this.saved.set(i, clip.seconds);
+      void saveClip(this.opts.bookId, voice, i, clip.blob, clip.seconds);
+      if (keepInMemory || Math.abs(i - this.state.index) < MEMORY_WINDOW) this.cache.set(i, clip);
+      else URL.revokeObjectURL(clip.url);
+      const rtf = kokoro.realTimeFactor;
+      if (rtf !== null && rtf > 1.05 !== this.state.slow) this.emit({ slow: rtf > 1.05 });
+    } catch (err) {
+      if (gen !== this.voiceGen) return;
+      if (kokoro.current.phase === "error") {
+        // The engine itself failed: stop and tell the listener.
+        this.emit({ error: (err as Error).message, buffering: false });
+        this.notify();
+        return;
+      }
+      // One odd sentence failed: skip it rather than stopping the book.
+      this.cache.set(i, null);
+    }
+  }
+
+  /** Publishes how much is prepared, for the UI. */
+  private report() {
+    const { index } = this.state;
+    const ahead = this.readyAhead(index).seconds;
+    const [start, end] = this.chapterBounds(index);
+    let ready = 0;
+    for (let i = start; i < end; i++) if (this.isReady(i)) ready++;
+    const chapterReady = end > start ? ready / (end - start) : 1;
+    if (Math.abs(ahead - this.state.ahead) >= 1 || Math.abs(chapterReady - this.state.chapterReady) >= 0.01) {
+      this.emit({ ahead, chapterReady });
+    }
   }
 
   private evict() {
     const { index } = this.state;
     for (const [i, clip] of this.cache) {
-      if (i < index - 2 || i > index + MAX_AHEAD + 10) {
+      if (i < index - 2 || i >= index + MEMORY_WINDOW + 4) {
         if (clip && i !== this.loadedIndex) URL.revokeObjectURL(clip.url);
         this.cache.delete(i);
       }
     }
   }
 
-  private clearCache() {
+  private clearMemory() {
     this.voiceGen++;
-    this.inflight = null;
+    this.busy = false;
     this.loadedIndex = -1;
     for (const clip of this.cache.values()) if (clip) URL.revokeObjectURL(clip.url);
     this.cache.clear();
-    this.waiters.forEach((list) => list.forEach((fn) => fn(null)));
-    this.waiters.clear();
+    this.notify();
   }
 
   // ---------- lock screen / headphone controls ----------
