@@ -274,13 +274,19 @@ export class Narrator {
   }
 
   /** How much of a chapter is prepared, and whether it's queued. */
-  chapterProgress(start: number): { ready: number; total: number; queued: boolean; loaded: boolean } {
+  chapterProgress(start: number): { ready: number; readySeconds: number; total: number; queued: boolean; loaded: boolean } {
     const [s, e] = this.chapterBounds(start);
     const voice = this.chapterVoice(start);
     const saved = this.savedFor(voice);
     let ready = 0;
-    for (let i = s; i < e; i++) if (this.isReady(i)) ready++;
-    return { ready, total: e - s, queued: this.queue.includes(start), loaded: !!saved };
+    let readySeconds = 0;
+    for (let i = s; i < e; i++) {
+      if (this.isReady(i)) {
+        ready++;
+        readySeconds += this.secondsOf(i);
+      }
+    }
+    return { ready, readySeconds, total: e - s, queued: this.queue.includes(start), loaded: !!saved };
   }
 
   destroy() {

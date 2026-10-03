@@ -637,9 +637,13 @@ p {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  padding: 6px 24px 10px;
-  overflow: hidden;
+  gap: 12px;
+  padding: 6px 20px 12px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.listen > * {
+  flex-shrink: 0;
 }
 .np-art {
   flex: 0 1 auto;
@@ -697,8 +701,8 @@ p {
   white-space: nowrap;
 }
 .np-caption {
-  flex: 1;
-  min-height: 3.2em;
+  flex: 1 0 auto;
+  min-height: 0;
   width: 100%;
   max-width: 34em;
   display: flex;
@@ -708,8 +712,6 @@ p {
   text-align: center;
   font-family: var(--serif);
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
-  mask-image: linear-gradient(to bottom, #000 70%, transparent);
 }
 .np-now {
   font-size: 20px;
@@ -752,9 +754,12 @@ p {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.prep-row.small {
+  flex-wrap: wrap;
+}
 .prep-row.small span:last-child {
   text-align: right;
-  flex: none;
+  margin-left: auto;
 }
 .bar-fill.pulse {
   animation: pulse 1.4s ease-in-out infinite;

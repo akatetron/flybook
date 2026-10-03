@@ -8,7 +8,7 @@ import { env } from "@huggingface/transformers";
 import ortWasmUrl from "../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm?url";
 
 export type WorkerRequest =
-  | { type: "load"; device: "webgpu" | "wasm"; threads: number }
+  | { type: "load"; device: "webgpu" | "wasm"; threads: number; dtype: string }
   | { type: "generate"; id: number; text: string; voice: string };
 
 export type WorkerResponse =
@@ -51,7 +51,7 @@ function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
   return buffer;
 }
 
-async function load(device: "webgpu" | "wasm") {
+async function load(device: "webgpu" | "wasm", dtype: string) {
   const files = new Map<string, { loaded: number; total: number }>();
   const progress_callback = (p: { status: string; file?: string; loaded?: number; total?: number }) => {
     if (p.status !== "progress" || !p.file) return;
@@ -77,13 +77,22 @@ async function load(device: "webgpu" | "wasm") {
     // several times faster than real time. CPU: the compact 8-bit model
     // (~90 MB).
     tts = await KokoroTTS.from_pretrained(MODEL_ID, {
-      dtype: device === "webgpu" ? "fp32" : "q8",
+      dtype: dtype as "fp32" | "fp16" | "q8",
       device,
       progress_callback: progress_callback as never,
     });
     // Warm up once (on a GPU this compiles its programs), so the first real
     // sentence isn't slow and a broken backend fails here, not mid-book.
-    await tts.generate("Hello.", { voice: "af_heart" });
+    const test = await tts.generate("Hello there.", { voice: "af_heart" });
+    // Some GPUs return silence or garbage at reduced precision: treat as a failure.
+    const samples = test.audio as Float32Array;
+    let peak = 0;
+    for (let i = 0; i < samples.length; i++) {
+      const v = Math.abs(samples[i]);
+      if (Number.isNaN(v)) throw new Error("The GPU voice produced invalid audio.");
+      if (v > peak) peak = v;
+    }
+    if (peak < 0.01) throw new Error("The GPU voice produced silent audio.");
     post({
       type: "ready",
       device,
@@ -110,7 +119,7 @@ if (!isRuntimeThread) self.onmessage = async (event: MessageEvent<WorkerRequest>
     wasm.wasmPaths = { wasm: wasmUrl };
     // Threads only work when the page is cross-origin isolated.
     wasm.numThreads = self.crossOriginIsolated ? msg.threads : 1;
-    if (!tts) await load(msg.device);
+    if (!tts) await load(msg.device, msg.dtype);
     else post({ type: "ready", device: msg.device, threads: wasm.numThreads ?? 1, isolated: self.crossOriginIsolated });
     return;
   }

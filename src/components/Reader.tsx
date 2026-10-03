@@ -746,14 +746,14 @@ function ChapterRow({
               <span className="ch-bar">
                 <span style={{ width: `${pct}%` }} />
               </span>
-              {pct}%
+              {formatDuration(p.readySeconds / 60)} ready
               <button className="ch-cancel" onClick={() => narrator.cancelPrepare(start)} aria-label="Stop preparing">
                 ✕
               </button>
             </span>
           ) : (
             <button className="ch-prepare" onClick={() => narrator.prepareChapter(start)}>
-              {pct > 0 ? `Prepare (${pct}%)` : "Prepare"}
+              {p.ready > 0 ? `Prepare (${formatDuration(p.readySeconds / 60)} ready)` : "Prepare"}
             </button>
           )}
         </div>
@@ -772,7 +772,6 @@ function NextChapterPrep({
   onOpenChapters: () => void;
 }) {
   const p = narrator.chapterProgress(chapter.start);
-  const pct = p.total ? Math.floor((p.ready / p.total) * 100) : 0;
   const voice = studioVoice(narrator.chapterVoice(chapter.start)).name;
   return (
     <div className="prep-next">
@@ -784,7 +783,7 @@ function NextChapterPrep({
           <CheckIcon width={14} height={14} /> Ready
         </span>
       ) : p.queued ? (
-        <span className="ch-state">{pct}% prepared</span>
+        <span className="ch-state">{formatDuration(p.readySeconds / 60)} ready</span>
       ) : (
         <button className="ch-prepare" onClick={() => narrator.prepareChapter(chapter.start)}>
           Prepare

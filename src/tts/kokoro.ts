@@ -71,15 +71,23 @@ function setFlag(key: string, value = "1") {
   }
 }
 
-async function gpuAvailable(): Promise<boolean> {
-  // Phones can't hold the large GPU model in memory: Safari kills the page.
-  if (isIOS() || /Android|Mobile/i.test(navigator.userAgent) || flag(NO_GPU_KEY)) return false;
-  const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
-  if (!gpu) return false;
+/** What the GPU path can use on this device: none, or the model precision. */
+async function gpuMode(): Promise<"fp32" | "fp16" | null> {
+  if (flag(NO_GPU_KEY)) return null;
+  const gpu = (
+    navigator as Navigator & { gpu?: { requestAdapter(): Promise<{ features: Set<string> } | null> } }
+  ).gpu;
+  if (!gpu) return null;
   try {
-    return !!(await gpu.requestAdapter());
+    const adapter = await gpu.requestAdapter();
+    if (!adapter) return null;
+    const phone = isIOS() || /Android|Mobile/i.test(navigator.userAgent);
+    // Phones can't hold the full-precision model (Safari kills the page), but
+    // the half-precision one (~160 MB) fits and runs far faster than the CPU.
+    if (phone) return adapter.features.has("shader-f16") ? "fp16" : null;
+    return "fp32";
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -133,8 +141,7 @@ class KokoroClient {
 
   /** Download size for the next load, shown before asking to download. */
   get downloadLabel(): string {
-    const phone = isIOS() || /Android|Mobile/i.test(navigator.userAgent);
-    return phone || flag(NO_GPU_KEY) || !("gpu" in navigator) ? "about 90 MB" : "about 330 MB";
+    return "about 90–160 MB";
   }
 
   /** The voice crashed this page before, even in its safest mode. */
@@ -190,10 +197,11 @@ class KokoroClient {
   /** Tries the fastest mode first and steps down until one works. */
   private async loadBest(): Promise<void> {
     for (;;) {
-      const device: Device = (await gpuAvailable()) ? "webgpu" : "wasm";
+      const precision = await gpuMode();
+      const device: Device = precision ? "webgpu" : "wasm";
       const threads = device === "wasm" ? cpuThreads() : 1;
       try {
-        await this.start(device, threads);
+        await this.start(device, threads, precision ?? "q8");
         return;
       } catch (err) {
         const message = (err as Error).message;
@@ -220,7 +228,7 @@ class KokoroClient {
     return false;
   }
 
-  private start(device: Device, threads: number): Promise<void> {
+  private start(device: Device, threads: number, dtype: string): Promise<void> {
     this.attempt = { device, threads };
     setFlag(ATTEMPT_KEY, `${device}/${threads}`);
     return new Promise<void>((resolve, reject) => {
@@ -288,7 +296,7 @@ class KokoroClient {
         this.stepDown(device, threads);
         this.restart(new EngineHung(message));
       };
-      worker.postMessage({ type: "load", device, threads } satisfies WorkerRequest);
+      worker.postMessage({ type: "load", device, threads, dtype } satisfies WorkerRequest);
     });
   }
 
