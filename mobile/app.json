@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "FlyBook",
+    "slug": "flybook",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.flybook"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0b1510",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "app.flybook"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "flybook"
+  }
+}
