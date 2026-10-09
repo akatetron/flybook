@@ -29,6 +29,7 @@
   },
   "include": [
     "src",
+    "shared",
     "vite.config.ts"
   ]
 }

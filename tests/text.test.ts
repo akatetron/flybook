@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildBookText, splitLong, splitSentences, stripHeadersAndFooters, type PageLines } from "../src/lib/text.ts";
+import { buildBookText, splitLong, splitSentences, stripHeadersAndFooters, type PageLines } from "../shared/text.ts";
 
 const line = (text: string, y: number, fontSize = 11) => ({ text, y, height: fontSize, fontSize });
 
