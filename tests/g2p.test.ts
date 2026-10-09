@@ -6,7 +6,7 @@ import { G2P, Lexicon, cardinal, ordinal, year } from "../shared/g2p.ts";
 const lexicon = JSON.parse(readFileSync(new URL("../mobile/assets/kokoro/us_lexicon.txt", import.meta.url), "utf8"));
 const g2p = new G2P(new Lexicon(lexicon.gold, lexicon.silver));
 // Kokoro v1.0 phoneme set (misaki US vocabulary, with T and t for flap/glottal stop).
-const KOKORO = new Set("AIOWYbdfhijklmnpstuvwzæðŋɑɔəɛɜɡɪɹʃʊʌʒʤʧˈˌθᵊᵻT ;:,.!?—…\"“”«»ɐ");
+const KOKORO = new Set("AIOWYbdfhijklmnpstuvwzæðŋɑɔəɛɜɡɪɹʃʊʌʒʤʧˈˌθᵊᵻT ;:,.!?—…\"“”()ɐ");
 
 test("dictionary words", () => {
   assert.equal(g2p.phonemize("Hello, world!"), "həlˈO, wˈɜɹld!");

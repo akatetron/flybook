@@ -10,7 +10,7 @@ for (const f of files) {
   if (!res.ok) failed = true;
 }
 const vocab = (await (await fetch(`${REPO}/tokenizer.json`)).json()).model.vocab;
-const produced = "AIOWYbdfhijklmnpstuvwzæðŋɑɔəɛɜɡɪɹʃʊʌʒʤʧˈˌθᵊᵻTɐ ;:,.!?—…\"“”«»";
+const produced = "AIOWYbdfhijklmnpstuvwzæðŋɑɔəɛɜɡɪɹʃʊʌʒʤʧˈˌθᵊᵻTɐ ;:,.!?—…\"“”()";
 const missing = [...produced].filter((c) => !(c in vocab));
 console.log(missing.length ? `FAIL phonemes missing from vocab: ${missing.join(" ")}` : "ok   all phonemes are in the Kokoro vocab");
 if (missing.length || failed) process.exit(1);

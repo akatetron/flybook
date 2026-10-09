@@ -384,7 +384,7 @@ export class G2P {
       if (CURRENCIES[t] && /^\d/.test(raw[i + 1]?.text ?? "")) {
         ps = "";
       } else if (/^[;:,.!?—…"“”()–-]+$/.test(t)) {
-        ps = t === "-" || t === "–" ? "—" : [...t].map((c) => (c === "(" ? "«" : c === ")" ? "»" : PUNCTS.has(c) ? c : "")).join("");
+        ps = t === "-" || t === "–" ? "—" : [...t].map((c) => (c === "(" || c === ")" || PUNCTS.has(c) ? c : "")).join("");
       } else if (/^[\d.]/.test(t) && /\d/.test(t)) {
         currency = i > 0 && CURRENCIES[raw[i - 1].text] ? raw[i - 1].text : null;
         ps = this.lexicon.numberWords(t, currency)[0];
