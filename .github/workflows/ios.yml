@@ -32,6 +32,6 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       - name: Start the cloud build
-        run: npx eas-cli@latest build --platform ios --profile ${{ inputs.profile }} --non-interactive --no-wait
+        run: npx eas-cli@latest build --platform ios --profile ${{ inputs.profile }} --non-interactive --wait
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
