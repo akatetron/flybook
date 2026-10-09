@@ -26,10 +26,10 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npx expo prebuild --platform android --no-install
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Build standalone APK (release mode, debug-signed for testing)
+        run: ./gradlew assembleRelease --no-daemon
         working-directory: mobile/android
       - uses: actions/upload-artifact@v4
         with:
-          name: flybook-debug-apk
-          path: mobile/android/app/build/outputs/apk/debug/*.apk
+          name: flybook-test-apk
+          path: mobile/android/app/build/outputs/apk/release/*.apk

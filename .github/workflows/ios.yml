@@ -1,0 +1,37 @@
+name: iOS build (EAS)
+
+# Runs only when started by hand: each EAS build uses the account's build quota.
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "simulator (no Apple account needed) or preview/production (needs Apple Developer account)"
+        default: simulator
+
+jobs:
+  ios:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Check Expo login
+        run: npx eas-cli@latest whoami
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      - name: Link the Expo project (creates it on first run)
+        run: npx eas-cli@latest init --non-interactive --force
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      - name: Start the cloud build
+        run: npx eas-cli@latest build --platform ios --profile ${{ inputs.profile }} --non-interactive --no-wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
