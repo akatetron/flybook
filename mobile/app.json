@@ -28,7 +28,14 @@
     },
     "scheme": "flybook",
     "plugins": [
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": true
+        }
+      ],
+      "expo-sqlite"
     ]
   }
 }
