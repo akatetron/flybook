@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import type { SystemVoice } from "../modules/flybook-native";
+import * as Kokoro from "./kokoro";
 import { player, type PlayerState } from "./player";
 import { preparer, type PrepStatus } from "./preparer";
 import { getBook, loadContent, updateBook, type BookContent, type BookMeta } from "./storage";
-import { colors, formatMinutes } from "./theme";
-import { defaultVoice, getVoices, languageName } from "./voices";
+import { colors, formatBytes, formatMinutes } from "./theme";
+import { phoneVoices, resolveVoice, studioVoices, type Voice } from "./voices";
 
 const RATES = [0.8, 1, 1.25, 1.5, 2];
 const SLEEP = [15, 30, 60];
@@ -25,7 +25,7 @@ function usePrep(): PrepStatus {
 export function ReaderScreen({ bookId, onBack }: { bookId: string; onBack: () => void }) {
   const [book, setBook] = useState<BookMeta | null>(null);
   const [content, setContent] = useState<BookContent | null>(null);
-  const [voice, setVoice] = useState<SystemVoice | null>(null);
+  const [voice, setVoice] = useState<Voice | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<"voice" | "chapters" | null>(null);
   const p = usePlayer();
@@ -35,9 +35,9 @@ export function ReaderScreen({ bookId, onBack }: { bookId: string; onBack: () =>
     let live = true;
     (async () => {
       try {
-        const [meta, text, voices] = await Promise.all([getBook(bookId), loadContent(bookId), getVoices()]);
+        const [meta, text] = await Promise.all([getBook(bookId), loadContent(bookId)]);
         if (!meta || !live) return;
-        const chosen = voices.find((v) => v.id === meta.voiceId) ?? (await defaultVoice());
+        const chosen = await resolveVoice(meta.voiceId);
         if (!chosen) throw new Error("This phone has no text-to-speech voices installed.");
         if (chosen.id !== meta.voiceId) await updateBook(bookId, { voiceId: chosen.id });
         await updateBook(bookId, { openedAt: Date.now() });
@@ -216,32 +216,88 @@ function Back({ onBack }: { onBack: () => void }) {
   );
 }
 
-function VoiceSheet(props: { visible: boolean; current: SystemVoice; onClose: () => void; onPick: (v: SystemVoice) => void }) {
-  const [voices, setVoices] = useState<SystemVoice[]>([]);
+function VoiceSheet(props: { visible: boolean; current: Voice; onClose: () => void; onPick: (v: Voice) => void }) {
+  const [phone, setPhone] = useState<Voice[]>([]);
+  const [installed, setInstalled] = useState(Kokoro.isInstalled());
+  const [progress, setProgress] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    if (props.visible) getVoices().then(setVoices, () => setVoices([]));
+    if (props.visible) phoneVoices().then(setPhone, () => setPhone([]));
   }, [props.visible]);
+
+  async function download() {
+    setError(null);
+    setProgress(0);
+    try {
+      await Kokoro.install(setProgress);
+      await Kokoro.installVoice(Kokoro.STUDIO_VOICES[0].id);
+      setInstalled(true);
+    } catch (e) {
+      setError(`Download failed: ${(e as Error).message}. Check your connection and try again.`);
+    } finally {
+      setProgress(null);
+    }
+  }
+
+  async function pick(v: Voice) {
+    if (v.studio) {
+      try {
+        // Each voice is a small file (about half a megabyte).
+        await Kokoro.installVoice(v.id.slice(Kokoro.STUDIO_PREFIX.length));
+      } catch (e) {
+        setError(`Couldn't download this voice: ${(e as Error).message}`);
+        return;
+      }
+    }
+    props.onPick(v);
+  }
+
+  const row = (item: Voice, enabled: boolean) => (
+    <Pressable
+      key={item.id}
+      style={[styles.row, item.id === props.current.id && styles.rowOn, !enabled && { opacity: 0.45 }]}
+      onPress={() => enabled && pick(item)}
+    >
+      <Text style={styles.rowText}>{item.name}</Text>
+      <Text style={styles.small}>{item.detail}</Text>
+    </Pressable>
+  );
+
   return (
     <Modal visible={props.visible} animationType="slide" transparent onRequestClose={props.onClose}>
       <View style={styles.sheet}>
         <Text style={styles.sheetTitle}>Voice</Text>
-        <Text style={styles.small}>
-          These voices are built into your phone. Download better ones ("Enhanced" or "Premium") in your phone's settings, under
-          Accessibility → Spoken Content (iPhone) or Text-to-speech (Android).
-        </Text>
-        <FlatList
-          data={voices}
-          keyExtractor={(v) => v.id}
-          renderItem={({ item }) => (
-            <Pressable style={[styles.row, item.id === props.current.id && styles.rowOn]} onPress={() => props.onPick(item)}>
-              <Text style={styles.rowText}>
-                {item.name}
-                {item.enhanced ? "  ★" : ""}
+        <ScrollView>
+          <Text style={styles.section}>Studio voices · natural neural narration</Text>
+          {!installed && (
+            <View style={{ gap: 8, marginVertical: 8 }}>
+              <Text style={styles.small}>
+                A one-time download of about {Kokoro.MODEL_MB} MB. After that they work offline, and your books never leave the
+                phone. Preparing is slower than with phone voices, so FlyBook prepares ahead while you listen.
               </Text>
-              <Text style={styles.small}>{languageName(item.language)}</Text>
-            </Pressable>
+              {progress === null ? (
+                <Pressable style={styles.download} onPress={download}>
+                  <Text style={styles.downloadText}>Download studio voices</Text>
+                </Pressable>
+              ) : (
+                <View style={styles.bar}>
+                  <View style={[styles.barFill, { width: `${Math.round(progress * 100)}%` }]} />
+                </View>
+              )}
+            </View>
           )}
-        />
+          {error && <Text style={[styles.small, { color: colors.danger }]}>{error}</Text>}
+          {studioVoices().map((v) => row(v, installed))}
+          {installed && (
+            <Text style={styles.small}>Studio voices use {formatBytes(Kokoro.installedBytes())} on this phone.</Text>
+          )}
+          <Text style={styles.section}>Phone voices · instant</Text>
+          <Text style={styles.small}>
+            Get better ones ("Enhanced" or "Premium") in your phone's settings, under Accessibility → Spoken Content (iPhone) or
+            Text-to-speech (Android).
+          </Text>
+          {phone.map((v) => row(v, true))}
+        </ScrollView>
         <Pressable style={styles.close} onPress={props.onClose}>
           <Text style={styles.chipText}>Close</Text>
         </Pressable>
@@ -279,4 +335,7 @@ const styles = StyleSheet.create({
   rowOn: { backgroundColor: colors.surfaceHigh },
   rowText: { color: colors.text, fontSize: 16, flex: 1 },
   close: { alignSelf: "center", paddingVertical: 10, paddingHorizontal: 24 },
+  section: { color: colors.gold, fontSize: 13, fontWeight: "700", marginTop: 16, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 },
+  download: { backgroundColor: colors.gold, borderRadius: 12, paddingVertical: 12, alignItems: "center" },
+  downloadText: { color: colors.onGold, fontWeight: "700", fontSize: 15 },
 });

@@ -25,6 +25,8 @@ jobs:
           java-version: 17
       - run: npm ci
       - run: npm run typecheck
+      - name: Check studio voice downloads
+        run: node ../scripts/check-kokoro.mjs
       - run: npx expo prebuild --platform android --no-install
       - name: Build standalone APK (release mode, debug-signed for testing)
         run: ./gradlew assembleRelease --no-daemon

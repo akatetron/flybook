@@ -5,11 +5,12 @@
 import { File } from "expo-file-system";
 import { speakable, type Segment } from "../../shared/text";
 import Native from "../modules/flybook-native";
+import * as Kokoro from "./kokoro";
 import { audioDir, freeBytes, listClips, saveClip, type Clip } from "./storage";
 
 /** Keep this much space free for the rest of the phone. */
 const MIN_FREE_BYTES = 300 * 1024 * 1024;
-const EXT = process.env.EXPO_OS === "ios" ? "caf" : "wav";
+const SYSTEM_EXT = process.env.EXPO_OS === "ios" ? "caf" : "wav";
 
 export type PrepState = "idle" | "working" | "done" | "paused" | "no-space" | "error";
 
@@ -138,11 +139,25 @@ class Preparer {
         this.emit({ state: "working" });
         const dir = audioDir(f.bookId);
         dir.create({ intermediates: true, idempotent: true });
-        const file = new File(dir, `${idx}.${EXT}`);
+        const studio = Kokoro.isStudio(f.voiceId);
+        if (studio && !Kokoro.isInstalled()) {
+          this.emit({ state: "error", message: "Download the studio voices to use this voice." });
+          return;
+        }
+        // An older clip for this sentence in another voice (and maybe another format) is replaced.
+        const old = this.clips.get(idx);
+        if (old) {
+          const stale = new File(old.file);
+          if (stale.exists) stale.delete();
+        }
+        const file = new File(dir, `${idx}.${studio ? "wav" : SYSTEM_EXT}`);
         let clip: Clip | null = null;
         for (let attempt = 0; attempt < 2 && !clip; attempt++) {
           try {
-            const { durationMs } = await Native.renderToFile(speakable(f.segments[idx]), f.voiceId, 1, file.uri);
+            const text = speakable(f.segments[idx]);
+            const { durationMs } = studio
+              ? await Kokoro.render(text, f.voiceId, file.uri)
+              : await Native.renderToFile(text, f.voiceId, 1, file.uri);
             clip = { idx, voiceId: f.voiceId, file: file.uri, durationMs };
           } catch (e) {
             if (attempt === 1) {

@@ -10,6 +10,11 @@ declare class FlybookNativeModule extends NativeModule<{}> {
    * `rate` is 1 for normal speed.
    */
   renderToFile(text: string, voiceId: string, rate: number, path: string): Promise<RenderResult>;
+  /**
+   * Runs the Kokoro model at `modelPath` on phoneme token ids with one voice
+   * style vector (256 numbers) and writes 24 kHz audio to a WAV file at `path`.
+   */
+  kokoroRender(modelPath: string, ids: number[], style: number[], speed: number, path: string): Promise<RenderResult>;
   /** Positioned text lines for each page, read on the device. */
   extractPdf(uri: string): Promise<PdfText>;
 }

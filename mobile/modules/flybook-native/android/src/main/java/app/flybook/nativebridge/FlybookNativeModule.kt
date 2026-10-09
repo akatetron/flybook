@@ -1,5 +1,8 @@
 package app.flybook.nativebridge
 
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -19,9 +22,16 @@ import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.FloatBuffer
+import java.nio.LongBuffer
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+
+private const val KOKORO_RATE = 24000
 
 class FlybookNativeModule : Module() {
   private val context: Context
@@ -33,6 +43,8 @@ class FlybookNativeModule : Module() {
   private val waiting = mutableListOf<(TextToSpeech?) -> Unit>()
   private val pending = ConcurrentHashMap<String, Pair<File, Promise>>()
   private val pdfExecutor = Executors.newSingleThreadExecutor()
+  private val kokoroExecutor = Executors.newSingleThreadExecutor()
+  private var kokoro: Pair<String, OrtSession>? = null
 
   private fun withEngine(block: (TextToSpeech?) -> Unit) = synchronized(this) {
     if (ttsReady) return@synchronized block(tts)
@@ -136,11 +148,68 @@ class FlybookNativeModule : Module() {
       }
     }
 
+    // Neural voice: phoneme ids in, 24 kHz speech out, written as a WAV file.
+    AsyncFunction("kokoroRender") { modelPath: String, ids: List<Int>, style: List<Double>, speed: Double, path: String, promise: Promise ->
+      kokoroExecutor.execute {
+        try {
+          val samples = runKokoro(toFile(modelPath).absolutePath, ids, style, speed)
+          val file = toFile(path)
+          file.parentFile?.mkdirs()
+          writeWav(file, samples, KOKORO_RATE)
+          promise.resolve(mapOf("durationMs" to samples.size * 1000.0 / KOKORO_RATE))
+        } catch (e: Throwable) {
+          promise.reject("ERR_KOKORO", "The studio voice couldn't read this sentence: ${e.message}", e)
+        }
+      }
+    }
+
     OnDestroy {
       tts?.shutdown()
       tts = null
       pdfExecutor.shutdown()
+      kokoroExecutor.shutdown()
+      kokoro?.second?.close()
+      kokoro = null
     }
+  }
+
+  private fun runKokoro(modelPath: String, ids: List<Int>, style: List<Double>, speed: Double): FloatArray {
+    val env = OrtEnvironment.getEnvironment()
+    val session = kokoro?.takeIf { it.first == modelPath }?.second ?: run {
+      kokoro?.second?.close()
+      val options = OrtSession.SessionOptions().apply {
+        setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+        setIntraOpNumThreads(Runtime.getRuntime().availableProcessors().coerceIn(1, 4))
+      }
+      env.createSession(modelPath, options).also { kokoro = modelPath to it }
+    }
+    val idArray = LongArray(ids.size) { ids[it].toLong() }
+    val styleArray = FloatArray(style.size) { style[it].toFloat() }
+    OnnxTensor.createTensor(env, LongBuffer.wrap(idArray), longArrayOf(1, idArray.size.toLong())).use { input ->
+      OnnxTensor.createTensor(env, FloatBuffer.wrap(styleArray), longArrayOf(1, styleArray.size.toLong())).use { styleT ->
+        OnnxTensor.createTensor(env, FloatBuffer.wrap(floatArrayOf(speed.toFloat())), longArrayOf(1)).use { speedT ->
+          session.run(mapOf("input_ids" to input, "style" to styleT, "speed" to speedT)).use { result ->
+            val out = result.get(0) as OnnxTensor
+            val buffer = out.floatBuffer
+            return FloatArray(buffer.remaining()).also { buffer.get(it) }
+          }
+        }
+      }
+    }
+  }
+
+  private fun writeWav(file: File, samples: FloatArray, rate: Int) {
+    // A short pause after each sentence, like a narrator's breath.
+    val pad = (rate * 0.12).toInt()
+    val count = samples.size + pad
+    val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN).apply {
+      put("RIFF".toByteArray()); putInt(36 + count * 2); put("WAVE".toByteArray())
+      put("fmt ".toByteArray()); putInt(16); putShort(1); putShort(1); putInt(rate); putInt(rate * 2); putShort(2); putShort(16)
+      put("data".toByteArray()); putInt(count * 2)
+    }
+    val body = ByteBuffer.allocate(count * 2).order(ByteOrder.LITTLE_ENDIAN)
+    for (s in samples) body.putShort((s.coerceIn(-1f, 1f) * 32767f).toInt().toShort())
+    FileOutputStream(file).use { it.write(header.array()); it.write(body.array()) }
   }
 
   private fun readPdf(uri: String): Map<String, Any?> {
