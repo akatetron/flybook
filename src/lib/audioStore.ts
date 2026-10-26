@@ -148,3 +148,15 @@ export async function loadClips(book: string, voice: string, start: number, end:
   for (let i = start; i < end; i++) out.push(await loadClip(book, voice, i));
   return out;
 }
+
+/** Deletes one sentence's saved audio in every voice (after its text was corrected). */
+export async function deleteSentenceAudio(book: string, index: number) {
+  try {
+    const d = await db();
+    const keys = (await d.getAllKeys("lengths", IDBKeyRange.bound([book, "", 0], [book, "\uffff", Number.MAX_SAFE_INTEGER]))).filter((k) => k[2] === index);
+    const tx = d.transaction(["clips", "lengths"], "readwrite");
+    await Promise.all([...keys.flatMap((k) => [tx.objectStore("clips").delete(k), tx.objectStore("lengths").delete(k)]), tx.done]);
+  } catch {
+    /* ignore */
+  }
+}

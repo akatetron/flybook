@@ -24,6 +24,8 @@ export interface Segment {
   b?: 1;
   /** Is a heading. */
   h?: 1;
+  /** The extracted text, kept when the listener corrects what is spoken. */
+  o?: string;
 }
 
 export interface Chapter {

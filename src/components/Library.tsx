@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { deleteBook, listBooks, newId, saveBook, type BookMeta } from "../lib/db";
+import {
+  deleteBook,
+  listBooks,
+  listCollections,
+  newId,
+  saveBook,
+  saveCollection,
+  saveFile,
+  updateBook,
+  type BookMeta,
+  type Collection,
+} from "../lib/db";
 import { deleteBookAudio } from "../lib/audioStore";
 import { LockIcon, MoreIcon, OfflineIcon, PlayIcon, PlusIcon, WaveIcon } from "./Icons";
 import { WORDS_PER_MINUTE, formatDuration } from "../lib/format";
@@ -23,11 +34,29 @@ export function Library({ onOpen }: LibraryProps) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [shelf, setShelf] = useState<string>("");
   const refresh = useCallback(() => {
     listBooks()
       .then(setBooks)
       .catch(() => setBooks([]));
+    listCollections().then(setCollections, () => setCollections([]));
   }, []);
+
+  async function newCollection() {
+    const name = prompt("Name the collection (for example a matter, course or project):")?.trim();
+    if (!name) return;
+    const c = { id: newId(), name, createdAt: Date.now() };
+    await saveCollection(c);
+    setCollections((list) => [...list, c].sort((a, b) => a.name.localeCompare(b.name)));
+    setShelf(c.id);
+  }
+
+  async function moveTo(book: BookMeta, collection: string) {
+    setMenuFor(null);
+    await updateBook(book.id, { collection: collection || null });
+    refresh();
+  }
   useEffect(refresh, [refresh]);
 
   async function addSample() {
@@ -80,18 +109,36 @@ export function Library({ onOpen }: LibraryProps) {
           addedAt: now,
           openedAt: now,
           position: 0,
+          textQuality: result.kind === "text" ? "text" : "sparse",
         },
         { id, segments: result.segments, chapters: result.chapters }
       );
+      // Keep the original PDF for page view; the book still works if this fails (e.g. storage full).
+      try {
+        await saveFile({ id, blob: file, name: file.name, type: file.type || "application/pdf" });
+        await updateBook(id, { hasFile: true });
+      } catch {
+        /* text-only */
+      }
+      if (result.notice) {
+        try {
+          sessionStorage.setItem(`flybook:notice:${id}`, result.notice);
+        } catch {
+          /* ignore */
+        }
+      }
       onOpen(id);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const name = err instanceof Error ? err.name : "";
       setError(
-        /password/i.test(message)
+        name === "PasswordException" || /password/i.test(message)
           ? "This PDF is password-protected. Remove the password and try again."
-          : /invalid pdf|unexpected|corrupt/i.test(message)
-            ? "This file couldn't be opened — it may be damaged."
-            : message
+          : name === "InvalidPDFException" || /invalid pdf|unexpected|corrupt/i.test(message)
+            ? "This file couldn't be opened — it may be damaged or not really a PDF."
+            : name === "QuotaExceededError"
+              ? "There isn't enough storage space in this browser. Free some up in Storage and try again."
+              : message
       );
     } finally {
       setImporting(null);
@@ -101,7 +148,7 @@ export function Library({ onOpen }: LibraryProps) {
 
   async function remove(book: BookMeta) {
     setMenuFor(null);
-    if (!confirm(`Remove “${book.title}” from this device?`)) return;
+    if (!confirm(`Remove “${book.title}” from this device? Its text, original file, your place, highlights, notes, bookmarks and prepared audio are all deleted.`)) return;
     await Promise.all([deleteBook(book.id), deleteBookAudio(book.id)]);
     refresh();
   }
@@ -223,9 +270,21 @@ export function Library({ onOpen }: LibraryProps) {
 
       {hasBooks && (
         <>
-          <p className="section-label">Library · {books!.length}</p>
+          <div className="shelf-tabs" role="tablist" aria-label="Collections">
+            <button role="tab" aria-selected={!shelf} className={`chip ${!shelf ? "active" : ""}`} onClick={() => setShelf("")}>
+              All · {books!.length}
+            </button>
+            {collections.map((c) => (
+              <button key={c.id} role="tab" aria-selected={shelf === c.id} className={`chip ${shelf === c.id ? "active" : ""}`} onClick={() => setShelf(c.id)}>
+                {c.name} · {books!.filter((b) => b.collection === c.id).length}
+              </button>
+            ))}
+            <button className="chip ghost" onClick={newCollection}>
+              + Collection
+            </button>
+          </div>
           <ul className="shelf">
-            {books!.map((b) => {
+            {books!.filter((b) => !shelf || b.collection === shelf).map((b) => {
               const progress = progressOf(b);
               return (
                 <li key={b.id} className="shelf-item">
@@ -254,7 +313,20 @@ export function Library({ onOpen }: LibraryProps) {
                   </button>
                   {menuFor === b.id && (
                     <div className="menu">
-                      <button onClick={() => remove(b)}>Remove from phone</button>
+                      {collections.length > 0 && (
+                        <label className="menu-select">
+                          Collection
+                          <select value={b.collection ?? ""} onChange={(e) => moveTo(b, e.target.value)}>
+                            <option value="">None</option>
+                            {collections.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      <button onClick={() => remove(b)}>Remove from this device</button>
                     </div>
                   )}
                 </li>

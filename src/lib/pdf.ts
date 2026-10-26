@@ -3,6 +3,7 @@
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import { buildBookText, type BookText, type Line, type OutlineEntry, type PageLines } from "./text";
+import { KIND_MESSAGE, classifyPdf, type PageEvidence, type PdfTextKind } from "./pdfQuality";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -10,13 +11,21 @@ export interface ImportedPdf extends BookText {
   title: string;
   pageCount: number;
   cover: string | null;
+  kind: PdfTextKind;
+  /** Shown after import when the text has limitations. */
+  notice: string | null;
 }
 
+/** The PDF has nothing that can be read aloud (no text layer). */
 export class ScannedPdfError extends Error {
-  constructor() {
-    super("This PDF has no readable text — it looks like scanned images.");
+  kind: PdfTextKind;
+  constructor(kind: PdfTextKind) {
+    super(KIND_MESSAGE[kind] ?? "This PDF has no readable text.");
+    this.kind = kind;
   }
 }
+
+const IMAGE_OPS = new Set([pdfjs.OPS.paintImageXObject, pdfjs.OPS.paintInlineImageXObject, pdfjs.OPS.paintImageMaskXObject]);
 
 type PdfDoc = Awaited<ReturnType<typeof pdfjs.getDocument>["promise"]>;
 
@@ -123,19 +132,31 @@ export async function importPdf(
   const doc = await task.promise;
   try {
     const pages: PageLines[] = [];
-    let chars = 0;
+    const evidence: PageEvidence[] = [];
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);
       const viewport = page.getViewport({ scale: 1 });
       const content = await page.getTextContent();
       const items = content.items.filter((i): i is RawItem & (typeof content.items)[number] => "str" in i);
       const lines = itemsToLines(items as RawItem[], viewport.height);
-      for (const l of lines) chars += l.text.length;
+      const chars = lines.reduce((sum, l) => sum + l.text.trim().length, 0);
+      // Only pages without text are checked for images (cheap enough per page).
+      let hasImage: boolean | null = null;
+      if (chars < 3) {
+        try {
+          const ops = await page.getOperatorList();
+          hasImage = ops.fnArray.some((fn) => IMAGE_OPS.has(fn));
+        } catch {
+          hasImage = null;
+        }
+      }
+      evidence.push({ chars, hasImage });
       pages.push({ page: n, lines });
       page.cleanup();
       onProgress(n, doc.numPages);
     }
-    if (chars < Math.max(40, doc.numPages * 20)) throw new ScannedPdfError();
+    const kind = classifyPdf(evidence);
+    if (kind === "image-only" || kind === "empty") throw new ScannedPdfError(kind);
 
     const [outline, cover, meta] = await Promise.all([
       readOutline(doc),
@@ -144,7 +165,7 @@ export async function importPdf(
     ]);
     const text = buildBookText(pages, outline);
     const info = meta?.info as { Title?: unknown } | undefined;
-    return { ...text, title: cleanTitle(info?.Title, file.name), pageCount: doc.numPages, cover };
+    return { ...text, title: cleanTitle(info?.Title, file.name), pageCount: doc.numPages, cover, kind, notice: KIND_MESSAGE[kind] };
   } finally {
     await task.destroy();
   }

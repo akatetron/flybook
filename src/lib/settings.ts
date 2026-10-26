@@ -5,12 +5,20 @@ import { DEFAULT_PHONE_VOICE, defaultVoice, isPhone, studioVoice } from "../tts/
 
 export type Engine = "studio" | "system";
 
+export type Theme = "system" | "light" | "dark";
+
 export interface Settings {
   engine: Engine;
   studioVoice: string;
   systemVoice: string | null;
   speed: number;
   textSize: number;
+  theme: Theme;
+  /** Kokoro/Piper voices the listener starred. */
+  favorites: string[];
+  /** Narration options for documents with citations and references. */
+  skipCitations: boolean;
+  skipReferences: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -19,6 +27,10 @@ const DEFAULTS: Settings = {
   systemVoice: null,
   speed: 1,
   textSize: 19,
+  theme: "system",
+  favorites: [],
+  skipCitations: false,
+  skipReferences: false,
 };
 
 const KEY = "flybook:settings";

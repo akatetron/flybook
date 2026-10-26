@@ -1,5 +1,21 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { getBook, updateBook, type BookContent, type BookMeta } from "../lib/db";
+import {
+  deleteAnnotation,
+  getBook,
+  listAnnotations,
+  newId,
+  saveAnnotation,
+  saveContent,
+  updateBook,
+  type Annotation,
+  type BookContent,
+  type BookMeta,
+  type HighlightColor,
+} from "../lib/db";
+import { COLORS, bySentence, makeAnnotation } from "../lib/annotations";
+import { deleteSentenceAudio, loadClips } from "../lib/audioStore";
+import { joinWavs } from "../lib/wav";
+import { formatBytes } from "../lib/storage";
 import type { Settings } from "../lib/settings";
 import { Narrator, type NarratorState } from "../tts/narrator";
 import { tts } from "../tts/engines";
@@ -12,6 +28,8 @@ import { BackIcon, CheckIcon, ListIcon, MicIcon, MoonIcon, NextIcon, PauseIcon, 
 
 interface ReaderProps {
   bookId: string;
+  /** Sentence to open at (e.g. from a saved note), instead of the saved position. */
+  startAt?: number | null;
   settings: Settings;
   onSettings: (patch: Partial<Settings>) => void;
   onBack: () => void;
@@ -22,27 +40,55 @@ const WINDOW_BEFORE = 120;
 const WINDOW_AFTER = 300;
 const WINDOW_STEP = 250;
 
-export function Reader({ bookId, settings, onSettings, onBack }: ReaderProps) {
+export function Reader({ bookId, startAt, settings, onSettings, onBack }: ReaderProps) {
   const [book, setBook] = useState<{ meta: BookMeta; content: BookContent } | null | undefined>(undefined);
+  const [docVoice, setDocVoice] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     getBook(bookId).then((b) => {
+      if (b && startAt != null && startAt >= 0 && startAt < b.content.segments.length) {
+        b = { ...b, meta: { ...b.meta, position: startAt } };
+      }
       setBook(b);
+      setDocVoice(b?.meta.voice && STUDIO_VOICES.some((v) => v.id === b!.meta.voice) ? b.meta.voice : undefined);
       if (b) updateBook(bookId, { openedAt: Date.now() });
     });
-  }, [bookId]);
+  }, [bookId, startAt]);
+
+  // Each document remembers its own voice; choosing one also makes it the default for new documents.
+  const effective = docVoice ? { ...settings, studioVoice: docVoice } : settings;
+  const onEffective = useCallback(
+    (patch: Partial<Settings>) => {
+      if (patch.studioVoice) {
+        setDocVoice(patch.studioVoice);
+        void updateBook(bookId, { voice: patch.studioVoice });
+      }
+      onSettings(patch);
+    },
+    [bookId, onSettings]
+  );
 
   if (book === undefined) return <div className="center muted">Opening…</div>;
   if (book === null)
     return (
       <div className="center">
-        <p className="muted">This book isn't on this device any more.</p>
+        <p className="muted">This document isn't on this device any more.</p>
         <button className="btn" onClick={onBack}>
           Back to library
         </button>
       </div>
     );
-  return <ReaderView meta={book.meta} content={book.content} settings={settings} onSettings={onSettings} onBack={onBack} />;
+  return (
+    <ReaderView
+      key={startAt ?? "saved"}
+      meta={book.meta}
+      content={book.content}
+      settings={effective}
+      onSettings={onEffective}
+      onBack={onBack}
+      resumed={startAt == null && book.meta.position > 0}
+    />
+  );
 }
 
 function ReaderView({
@@ -51,8 +97,10 @@ function ReaderView({
   settings,
   onSettings,
   onBack,
-}: { meta: BookMeta; content: BookContent } & Omit<ReaderProps, "bookId">) {
-  const { segments, chapters } = content;
+  resumed,
+}: { meta: BookMeta; content: BookContent; resumed: boolean } & Omit<ReaderProps, "bookId" | "startAt">) {
+  const [segments, setSegments] = useState(content.segments);
+  const { chapters } = content;
 
   // ---------- narrator ----------
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,7 +109,7 @@ function ReaderView({
     (index: number) => {
       lastPosition.current = index;
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => updateBook(meta.id, { position: index }), 800);
+      saveTimer.current = setTimeout(() => updateBook(meta.id, { position: index, positionAt: Date.now() }), 800);
     },
     [meta.id]
   );
@@ -79,6 +127,8 @@ function ReaderView({
         studioVoice: settings.studioVoice,
         systemVoice: settings.systemVoice,
         speed: settings.speed,
+        skipCitations: settings.skipCitations,
+        skipReferences: settings.skipReferences,
         onPosition: savePosition,
       }),
     // Settings changes are pushed into the live narrator below instead.
@@ -100,6 +150,7 @@ function ReaderView({
   }, [narrator, meta.id]);
 
   useEffect(() => narrator.setSpeed(settings.speed), [narrator, settings.speed]);
+  useEffect(() => narrator.setNarration(settings.skipCitations, settings.skipReferences), [narrator, settings.skipCitations, settings.skipReferences]);
   useEffect(
     () => narrator.setVoice(settings.engine, settings.studioVoice, settings.systemVoice),
     [narrator, settings.engine, settings.studioVoice, settings.systemVoice]
@@ -228,14 +279,144 @@ function ReaderView({
 
   const stopFollowing = () => setFollow(false);
 
+  // ---------- annotations ----------
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  useEffect(() => {
+    listAnnotations(meta.id).then(setAnnotations, () => setAnnotations([]));
+  }, [meta.id]);
+  const marks = useMemo(() => bySentence(annotations), [annotations]);
+  /** Sentences picked in the text: tap one, tap another to extend. */
+  const [selection, setSelection] = useState<{ start: number; end: number; anchor: number } | null>(null);
+  const [editor, setEditor] = useState<null | { kind: "note"; annotation: Annotation | null } | { kind: "correct"; index: number }>(null);
+  const [draft, setDraft] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  async function addAnnotation(kind: Annotation["kind"], start: number, end: number, extra: { color?: HighlightColor | null; note?: string } = {}) {
+    const a = makeAnnotation(meta.id, segments, kind, start, end, { ...extra, id: newId(), now: Date.now() });
+    try {
+      await saveAnnotation(a);
+      setAnnotations((list) => [...list, a]);
+      return a;
+    } catch {
+      setToast("Couldn't save — your browser's storage may be full.");
+      return null;
+    }
+  }
+
+  async function removeAnnotation(a: Annotation) {
+    await deleteAnnotation(a.id);
+    setAnnotations((list) => list.filter((x) => x.id !== a.id));
+  }
+
+  /** The highlight exactly covering the selection, if any. */
+  const selectedHighlight = selection
+    ? annotations.find((a) => a.kind === "highlight" && a.start === selection.start && a.end === selection.end) ?? null
+    : null;
+  const selectedNote = selection
+    ? annotations.find((a) => a.kind === "note" && a.start === selection.start && a.end === selection.end) ?? null
+    : null;
+  const bookmarkAt = (i: number) => annotations.find((a) => a.kind === "bookmark" && a.start === i) ?? null;
+
+  async function toggleBookmark(i: number) {
+    const existing = bookmarkAt(i);
+    if (existing) {
+      await removeAnnotation(existing);
+      setToast("Bookmark removed");
+    } else if (await addAnnotation("bookmark", i, i)) setToast(`Bookmarked p. ${segments[i]?.p ?? 1}`);
+  }
+
+  async function highlight(color: HighlightColor) {
+    if (!selection) return;
+    if (selectedHighlight) {
+      const updated = { ...selectedHighlight, color, updatedAt: Date.now() };
+      await saveAnnotation(updated);
+      setAnnotations((list) => list.map((a) => (a.id === updated.id ? updated : a)));
+    } else await addAnnotation("highlight", selection.start, selection.end, { color });
+    setSelection(null);
+  }
+
+  function openNote() {
+    if (!selection) return;
+    setDraft(selectedNote?.note ?? "");
+    setEditor({ kind: "note", annotation: selectedNote });
+  }
+
+  async function saveNote() {
+    if (!editor || editor.kind !== "note" || !selection) return;
+    const text = draft.trim();
+    if (editor.annotation) {
+      if (!text) await removeAnnotation(editor.annotation);
+      else {
+        const updated = { ...editor.annotation, note: text, updatedAt: Date.now() };
+        await saveAnnotation(updated);
+        setAnnotations((list) => list.map((a) => (a.id === updated.id ? updated : a)));
+      }
+    } else if (text) await addAnnotation("note", selection.start, selection.end, { note: text });
+    setEditor(null);
+    setSelection(null);
+  }
+
+  /** Corrects what is spoken for one sentence; the extracted text is kept. */
+  async function saveCorrection() {
+    if (!editor || editor.kind !== "correct") return;
+    const i = editor.index;
+    const text = draft.replace(/\s+/g, " ").trim();
+    const seg = segments[i];
+    if (!seg || !text || text === seg.t) return setEditor(null);
+    // The narrator reads the same array, so the change applies to playback too.
+    segments[i] = { ...seg, t: text, o: seg.o ?? seg.t };
+    setSegments([...segments]);
+    try {
+      await saveContent({ id: meta.id, segments, chapters });
+      await deleteSentenceAudio(meta.id, i);
+      narrator.invalidate(i);
+      setToast("Correction saved for this document");
+    } catch {
+      setToast("Couldn't save the correction.");
+    }
+    setEditor(null);
+    setSelection(null);
+  }
+
   function onTextClick(e: React.MouseEvent) {
     const target = (e.target as HTMLElement).closest<HTMLElement>("[data-i]");
     if (!target) return;
     const i = Number(target.dataset.i);
-    setFollow(true);
-    narrator.seek(i);
-    if (!state.playing) togglePlay();
+    setSelection((sel) => {
+      if (!sel) return { start: i, end: i, anchor: i };
+      if (sel.start === i && sel.end === i) return null;
+      // Extend from where the selection started (up to a long paragraph's worth).
+      const start = Math.max(Math.min(sel.anchor, i), Math.max(sel.anchor, i) - 40);
+      return { start, end: Math.max(sel.anchor, i), anchor: sel.anchor };
+    });
   }
+
+  function playFromSelection() {
+    if (!selection) return;
+    setFollow(true);
+    narrator.seek(selection.start);
+    if (!state.playing) togglePlay();
+    setSelection(null);
+  }
+
+  useEffect(() => {
+    let notice: string | null = null;
+    try {
+      notice = sessionStorage.getItem(`flybook:notice:${meta.id}`);
+      sessionStorage.removeItem(`flybook:notice:${meta.id}`);
+    } catch {
+      /* ignore */
+    }
+    if (notice) setToast(notice);
+    else if (resumed) setToast(`Resumed at p. ${segments[meta.position]?.p ?? 1}`);
+    // Once, when the document opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Paragraph grouping for the visible window.
   const paragraphs = useMemo(() => {
@@ -262,12 +443,17 @@ function ReaderView({
   // ---------- keyboard (desktop) ----------
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (sheet || (e.target as HTMLElement).tagName === "INPUT") return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (sheet || editor || tag === "INPUT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.code === "Space") {
         e.preventDefault();
         togglePlay();
       } else if (e.code === "ArrowRight") narrator.next();
       else if (e.code === "ArrowLeft") narrator.prev();
+      else if (e.key === "]" && chapters[chapterIndex + 1]) narrator.seek(chapters[chapterIndex + 1].start);
+      else if (e.key === "[") narrator.seek(chapters[chapterIndex]?.start === index && chapterIndex > 0 ? chapters[chapterIndex - 1].start : (chapters[chapterIndex]?.start ?? 0));
+      else if (e.key === "b") void toggleBookmark(index);
+      else if (e.key === "Escape") setSelection(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -403,11 +589,26 @@ function ReaderView({
             const Tag = p.heading ? "h3" : "p";
             return (
               <Tag key={p.items[0]}>
-                {p.items.map((i) => (
-                  <span key={i} data-i={i} className={i === index ? "seg cur" : "seg"}>
-                    {segments[i].t}{" "}
-                  </span>
-                ))}
+                {p.items.map((i) => {
+                  const m = marks.get(i);
+                  const hl = m?.find((a) => a.kind === "highlight");
+                  const cls = [
+                    "seg",
+                    i === index && "cur",
+                    hl && `hl hl-${hl.color ?? "amber"}`,
+                    m?.some((a) => a.kind === "note") && "has-note",
+                    m?.some((a) => a.kind === "bookmark") && "has-bookmark",
+                    selection && i >= selection.start && i <= selection.end && "sel",
+                    segments[i].o !== undefined && "corrected",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+                  return (
+                    <span key={i} data-i={i} className={cls}>
+                      {segments[i].t}{" "}
+                    </span>
+                  );
+                })}
               </Tag>
             );
           })}
@@ -427,6 +628,106 @@ function ReaderView({
           Back to current sentence
         </button>
       )}
+
+      {view === "read" && selection && (
+        <div className="selection-bar" role="toolbar" aria-label="Selected passage">
+          <span className="selection-info">
+            {selection.end > selection.start ? `${selection.end - selection.start + 1} sentences` : "1 sentence"} · p.{" "}
+            {segments[selection.start]?.p ?? 1}
+            <span className="muted"> · tap another sentence to extend</span>
+          </span>
+          <div className="selection-actions">
+            <button className="btn small primary" onClick={playFromSelection}>
+              <PlayIcon width={14} height={14} /> Play from here
+            </button>
+            <span className="swatches" role="group" aria-label="Highlight colour">
+              {COLORS.map((c) => (
+                <button
+                  key={c.id}
+                  className={`swatch swatch-${c.id} ${selectedHighlight?.color === c.id ? "on" : ""}`}
+                  onClick={() => highlight(c.id)}
+                  aria-label={`Highlight ${c.label}`}
+                  aria-pressed={selectedHighlight?.color === c.id}
+                />
+              ))}
+            </span>
+            {selectedHighlight && (
+              <button className="btn small" onClick={() => removeAnnotation(selectedHighlight).then(() => setSelection(null))}>
+                Remove highlight
+              </button>
+            )}
+            <button className="btn small" onClick={openNote}>
+              {selectedNote ? "Edit note" : "Note"}
+            </button>
+            <button className="btn small" onClick={() => toggleBookmark(selection.start).then(() => setSelection(null))}>
+              {bookmarkAt(selection.start) ? "Remove bookmark" : "Bookmark"}
+            </button>
+            {selection.start === selection.end && (
+              <button
+                className="btn small"
+                onClick={() => {
+                  setDraft(segments[selection.start].t);
+                  setEditor({ kind: "correct", index: selection.start });
+                }}
+              >
+                Correct text
+              </button>
+            )}
+            <button className="icon-btn small" onClick={() => setSelection(null)} aria-label="Clear selection">
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="toast" role="status">
+          {toast}
+          {resumed && toast.startsWith("Resumed") && (
+            <button
+              className="link"
+              onClick={() => {
+                narrator.seek(0);
+                setToast(null);
+              }}
+            >
+              Start from the beginning
+            </button>
+          )}
+        </div>
+      )}
+
+      <Sheet title={editor?.kind === "correct" ? "Correct spoken text" : "Note"} open={!!editor} onClose={() => setEditor(null)}>
+        {editor?.kind === "correct" ? (
+          <p className="muted small">
+            Fix what the voice says for this sentence in this document only. The original PDF isn't changed
+            {segments[editor.index]?.o !== undefined ? "; the extracted text was: “" + segments[editor.index].o + "”" : ""}.
+          </p>
+        ) : (
+          <blockquote className="note-quote">
+            {selection ? segments.slice(selection.start, selection.end + 1).map((x) => x.t).join(" ") : ""}
+          </blockquote>
+        )}
+        <textarea
+          className="note-input"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={editor?.kind === "correct" ? 4 : 5}
+          autoFocus
+          aria-label={editor?.kind === "correct" ? "Spoken text" : "Note"}
+          placeholder={editor?.kind === "note" ? "Your note — kept on this device" : undefined}
+        />
+        <div className="stack">
+          <button className="btn primary" onClick={editor?.kind === "correct" ? saveCorrection : saveNote}>
+            Save
+          </button>
+          {editor?.kind === "correct" && segments[editor.index]?.o !== undefined && (
+            <button className="btn" onClick={() => setDraft(segments[editor.index].o!)}>
+              Restore extracted text
+            </button>
+          )}
+        </div>
+      </Sheet>
 
       <footer className="player">
         <div className="scrub">
@@ -528,6 +829,8 @@ function ReaderView({
             <ChapterRow
               key={`${c.start}-${i}`}
               narrator={narrator}
+              bookId={meta.id}
+              end={chapters[i + 1]?.start ?? segments.length}
               version={state.version}
               title={c.title}
               start={c.start}
@@ -688,6 +991,8 @@ function PrepPanel({
 
 function ChapterRow({
   narrator,
+  bookId,
+  end,
   title,
   start,
   page,
@@ -697,6 +1002,8 @@ function ChapterRow({
   onPlay,
 }: {
   narrator: Narrator;
+  bookId: string;
+  end: number;
   version: number;
   title: string;
   start: number;
@@ -710,6 +1017,36 @@ function ChapterRow({
   const p = narrator.chapterProgress(start);
   const pct = p.total ? Math.floor((p.ready / p.total) * 100) : 0;
   const done = p.total > 0 && p.ready >= p.total;
+  const [exporting, setExporting] = useState<{ done: number; total: number; abort: AbortController } | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  /** Saves the prepared chapter as one WAV file (made on this device from the saved sentences). */
+  async function exportAudio() {
+    const abort = new AbortController();
+    setExportError(null);
+    setExporting({ done: 0, total: end - start, abort });
+    try {
+      const clips = await loadClips(bookId, voice, start, end);
+      const missing = clips.findIndex((c) => !c);
+      if (missing >= 0) throw new Error(`Sentence ${start + missing + 1} isn't prepared in this voice yet.`);
+      const { blob } = await joinWavs(clips as Blob[], {
+        signal: abort.signal,
+        onProgress: (d, t) => setExporting((x) => (x ? { ...x, done: d, total: t } : x)),
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "chapter"}.wav`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      setExportError(`Saved ${formatBytes(blob.size)} WAV`);
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") setExportError((e as Error).message);
+    } finally {
+      setExporting(null);
+    }
+  }
+
   return (
     <li className={`ch ${current ? "current" : ""}`}>
       <button className="ch-main" onClick={onPlay}>
@@ -742,6 +1079,16 @@ function ChapterRow({
           {done ? (
             <span className="ch-state ready">
               <CheckIcon width={14} height={14} /> Ready
+              {exporting ? (
+                <button className="ch-prepare" onClick={() => exporting.abort.abort()}>
+                  Exporting {Math.round((exporting.done / Math.max(1, exporting.total)) * 100)}% · Cancel
+                </button>
+              ) : (
+                <button className="ch-prepare" onClick={exportAudio} title="Save this chapter as a WAV audio file">
+                  Export WAV
+                </button>
+              )}
+              {exportError && <span className="muted tiny">{exportError}</span>}
             </span>
           ) : p.queued ? (
             <span className="ch-state">

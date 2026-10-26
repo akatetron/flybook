@@ -14,6 +14,7 @@ import type { Clip } from "./kokoro";
 import { tts } from "./engines";
 import { findSystemVoice } from "./system";
 import { models } from "./modelStore";
+import { referenceSections, stripCitations } from "../../shared/narration";
 
 export interface NarratorState {
   index: number;
@@ -45,6 +46,10 @@ export interface NarratorOptions {
   studioVoice: string;
   systemVoice: string | null;
   speed: number;
+  /** Speak without citations like [12] or (Smith, 2020). */
+  skipCitations?: boolean;
+  /** Skip reference/bibliography sections when playing through. */
+  skipReferences?: boolean;
   onPosition: (index: number) => void;
 }
 
@@ -84,6 +89,8 @@ export class Narrator {
   private unlocked = false;
   private sleepTimer: ReturnType<typeof setTimeout> | null = null;
   private unsubscribeModels: () => void = () => undefined;
+  /** Sentences passed over when playing through (reference sections). */
+  private skip = new Set<number>();
 
   constructor(opts: NarratorOptions) {
     this.opts = opts;
@@ -121,6 +128,7 @@ export class Narrator {
         }
       }, 0);
     });
+    this.setNarration(!!opts.skipCitations, !!opts.skipReferences);
     this.chapterVoices = loadJSON(`flybook:chapter-voices:${opts.bookId}`, {});
     this.queue = loadJSON(`flybook:prepare-queue:${opts.bookId}`, []);
     this.setupMediaSession();
@@ -295,6 +303,28 @@ export class Narrator {
     return { ready, readySeconds, total: e - s, queued: this.queue.includes(start), loaded: !!saved };
   }
 
+  /** Narration options. They apply to sentences prepared from now on. */
+  setNarration(skipCitations: boolean, skipReferences: boolean) {
+    this.opts.skipCitations = skipCitations;
+    this.opts.skipReferences = skipReferences;
+    this.skip = skipReferences ? referenceSections(this.opts.segments, this.opts.chapters) : new Set();
+  }
+
+  private textFor(i: number): string {
+    const text = speakable(this.opts.segments[i]);
+    return this.opts.skipCitations ? stripCitations(text) : text;
+  }
+
+  /** A sentence's text changed: forget its audio so it's spoken again from the new text. */
+  invalidate(index: number) {
+    const clip = this.cache.get(index);
+    if (clip) URL.revokeObjectURL(clip.url);
+    this.cache.delete(index);
+    for (const map of this.saved.values()) map.delete(index);
+    if (index === this.state.index && this.state.playing) this.seek(index);
+    this.pump();
+  }
+
   destroy() {
     this.unsubscribeModels();
     this.pause();
@@ -361,7 +391,7 @@ export class Narrator {
 
   private speakSystem(index: number, token: number) {
     speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(speakable(this.opts.segments[index]));
+    const utterance = new SpeechSynthesisUtterance(this.textFor(index));
     const voice = findSystemVoice(this.opts.systemVoice);
     if (voice) {
       utterance.voice = voice;
@@ -381,7 +411,8 @@ export class Narrator {
   }
 
   private advance() {
-    const nextIndex = this.state.index + 1;
+    let nextIndex = this.state.index + 1;
+    while (this.skip.has(nextIndex)) nextIndex++;
     if (nextIndex >= this.opts.segments.length) {
       this.token++;
       this.emit({ playing: false, finished: true });
@@ -522,7 +553,7 @@ export class Narrator {
     const [, chapterEnd] = this.chapterBounds(index);
     const until = Math.min(n, Math.max(chapterEnd, index + MIN_PREPARE));
     for (let i = index; i < until; i++) {
-      if (!this.isReady(i)) return void this.run(() => this.generate(i, false), true);
+      if (!this.isReady(i) && !this.skip.has(i)) return void this.run(() => this.generate(i, false), true);
     }
 
     // 3. Chapters the listener queued, in order.
@@ -530,7 +561,7 @@ export class Narrator {
       const [s, e] = this.chapterBounds(this.queue[0]);
       if (!this.savedFor(this.voiceAt(s))) return;
       for (let i = s; i < e; i++) {
-        if (!this.isReady(i)) return void this.run(() => this.generate(i, false), true);
+        if (!this.isReady(i) && !this.skip.has(i)) return void this.run(() => this.generate(i, false), true);
       }
       this.queue.shift(); // fully prepared
       saveJSON(`flybook:prepare-queue:${this.opts.bookId}`, this.queue);
@@ -569,7 +600,7 @@ export class Narrator {
     const gen = this.voiceGen;
     const voice = this.voiceAt(i);
     try {
-      const clip = await tts.generate(speakable(this.opts.segments[i]), voice);
+      const clip = await tts.generate(this.textFor(i), voice);
       if (gen !== this.voiceGen) {
         URL.revokeObjectURL(clip.url);
         return;
