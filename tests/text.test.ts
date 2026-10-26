@@ -77,3 +77,16 @@ test("falls back to page-range chapters when there is no structure", () => {
   const { chapters } = buildBookText(pages);
   assert.deepEqual(chapters.map((c) => c.title), ["Pages 1–10", "Pages 11–20", "Pages 21–25"]);
 });
+
+test("a lone list number joins the sentence after it", async () => {
+  const { buildBookText } = await import("../shared/text.ts");
+  const book = buildBookText([{ page: 1, lines: [line("1. It featured some odd car changes. Replacing them was hard.", 100)] }]);
+  assert.deepEqual(book.segments.map((s) => s.t), ["1. It featured some odd car changes.", "Replacing them was hard."]);
+});
+
+test("web addresses are spoken as their site name, display text is unchanged", async () => {
+  const { speakable } = await import("../shared/text.ts");
+  const seg = { t: "SilentPatch (https://silentsblog.com/mods/gta-vc/#silentpatch) and www.example.org/page.", p: 1 };
+  assert.equal(speakable(seg), "SilentPatch (link to silentsblog.com) and (link to example.org).");
+  assert.ok(seg.t.includes("https://"));
+});

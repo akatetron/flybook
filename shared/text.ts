@@ -233,6 +233,9 @@ export interface BookText {
   words: number;
 }
 
+/** "1.", "2)", "(iv)", "a." standing alone. */
+const LIST_MARKER = /^\(?(?:\d{1,3}|[ivxlc]{1,5}|[a-z])[.)]$/i;
+
 export function buildBookText(rawPages: PageLines[], outline: OutlineEntry[] = []): BookText {
   const pages = stripHeadersAndFooters(rawPages);
   const blocks = buildBlocks(pages);
@@ -245,9 +248,21 @@ export function buildBookText(rawPages: PageLines[], outline: OutlineEntry[] = [
       segments.push({ t: block.text, p: block.page, b: 1, h: 1 });
       continue;
     }
-    splitSentences(block.text).forEach((t, i) => {
-      segments.push(i === 0 ? { t, p: block.page, b: 1 } : { t, p: block.page });
-    });
+    // A list number on its own ("1.") would be spoken as a separate, odd
+    // sentence: attach it to the sentence that follows.
+    let marker = "";
+    let first = true;
+    for (const t of splitSentences(block.text)) {
+      if (LIST_MARKER.test(t)) {
+        marker += `${t} `;
+        continue;
+      }
+      const text = marker + t;
+      marker = "";
+      segments.push(first ? { t: text, p: block.page, b: 1 } : { t: text, p: block.page });
+      first = false;
+    }
+    if (marker) segments.push(first ? { t: marker.trim(), p: block.page, b: 1 } : { t: marker.trim(), p: block.page });
   }
 
   const words = segments.reduce((n, s) => n + s.t.split(/\s+/).length, 0);
@@ -296,6 +311,13 @@ function buildChapters(
 
 /** Text as handed to the speech engine (headings get a pause after them). */
 export function speakable(segment: Segment): string {
-  const t = segment.t;
+  const t = speakLinks(segment.t);
   return segment.h && !ENDS_SENTENCE.test(t) ? `${t}.` : t;
+}
+
+const URL_RE = /\(?\b(?:https?:\/\/|www\.)([^\s/()]+?)(?:[/#?][^\s()]*?)?(?=[.,;:!?]?(?:\s|\)|$))\)?/gi;
+
+/** Web addresses are spoken as "link to example.com" instead of character by character. */
+export function speakLinks(text: string): string {
+  return text.replace(URL_RE, (_m, host: string) => `(link to ${host.replace(/^www\./i, "").replace(/[.,;:]+$/, "")})`);
 }
