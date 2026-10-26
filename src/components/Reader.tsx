@@ -564,8 +564,8 @@ function ReaderView({
           {settings.engine === "studio" && state.slow && !state.error && (
             <div className="np-hint">
               <p>
-                This phone makes the studio voice slower than it plays. Pause for a minute to let it get ahead, or pick
-                an iPhone voice for instant playback.
+                This device makes this voice slower than it plays. Pause for a minute to let it get ahead, choose a
+                lighter voice, or use a built-in instant voice.
               </p>
               <button className="link" onClick={() => setSheet("voice")}>
                 Choose voice
