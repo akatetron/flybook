@@ -11,7 +11,7 @@ Natural neural voices · highlights & notes · works offline · no account · no
 [**Open Flybook →**](https://akatetron.github.io/flybook/)
 
 ![Deploy](https://github.com/akatetron/flybook/actions/workflows/deploy.yml/badge.svg)
-![Tests](https://img.shields.io/badge/tests-44%20unit%20%C2%B7%2018%20browser-2e7d5b)
+![Tests](https://img.shields.io/badge/tests-45%20unit%20%C2%B7%2018%20browser-2e7d5b)
 ![Privacy](https://img.shields.io/badge/server-none-16241b)
 
 <br>
@@ -114,6 +114,8 @@ Real run in headless Chromium on a 3-core cloud CPU (no GPU), with a 2-page, 77-
 | PDF import (text, sentences, chapters) | 1.1 s |
 | First audio after pressing play, **including** the voice download | 33 s |
 | Kokoro generation speed on that CPU | ≈ 0.5× real time — the app detects this and suggests pausing to build a buffer |
+| Reopening after a refresh | Voice reused from the device — **0** requests to Hugging Face; audio started in 0.18 s from saved sentences |
+| Network switched off | Prepared audio played offline |
 
 Computers with WebGPU, and recent phones with a Piper voice, are typically much faster. Device results are collected
 in [`docs/voice-benchmark.md`](docs/voice-benchmark.md).
@@ -142,7 +144,7 @@ voice's files from huggingface.co. Your documents, notes and audio are never sen
 ```bash
 npm install
 npm run dev          # http://localhost:5173
-npm test             # 44 unit tests
+npm test             # 45 unit tests
 npm run typecheck
 npm run build        # static site in dist/
 npm run e2e          # 18 Playwright browser tests (desktop + phone) against dist/ under /flybook/

@@ -15,6 +15,8 @@ export interface ModelAsset {
   cache: string;
   /** Needed to speak at all (false for files fetched only when a voice is used). */
   required: boolean;
+  /** Also used by another model (e.g. Kokoro's config and tokenizer), so its presence alone doesn't mean this model was downloaded. */
+  shared?: boolean;
 }
 
 export interface ModelInfo {
@@ -90,9 +92,9 @@ export function kokoroModel(precision: "q8" | "fp32"): ModelInfo {
     attribution: "Kokoro-82M by hexgrad; ONNX export by onnx-community",
     approxMB: precision === "q8" ? 92 : 326,
     assets: [
-      { url: `${KOKORO_REPO}/config.json`, cache: KOKORO_CACHE, required: true },
-      { url: `${KOKORO_REPO}/tokenizer.json`, cache: KOKORO_CACHE, required: true },
-      { url: `${KOKORO_REPO}/tokenizer_config.json`, cache: KOKORO_CACHE, required: true },
+      { url: `${KOKORO_REPO}/config.json`, cache: KOKORO_CACHE, required: true, shared: true },
+      { url: `${KOKORO_REPO}/tokenizer.json`, cache: KOKORO_CACHE, required: true, shared: true },
+      { url: `${KOKORO_REPO}/tokenizer_config.json`, cache: KOKORO_CACHE, required: true, shared: true },
       { url: `${KOKORO_REPO}/${file}`, cache: KOKORO_CACHE, required: true },
     ],
   };
@@ -168,8 +170,10 @@ export async function checkModel(caches: CacheStorageLike | null, model: ModelIn
   }
   const bytes = assets.reduce((n, a) => n + a.bytes, 0);
   const required = assets.filter((_, i) => model.assets[i].required);
+  const own = assets.filter((_, i) => model.assets[i].required && !model.assets[i].shared);
   let status: ModelStatus;
-  if (required.every((a) => !a.present)) status = "not-downloaded";
+  // Files shared with another model don't count as this model being (partly) downloaded.
+  if (required.every((a) => !a.present) || (own.length > 0 && own.every((a) => !a.present))) status = "not-downloaded";
   else if (required.some((a) => a.present && !a.ok)) status = "corrupt";
   else if (required.some((a) => !a.present)) status = "missing-files";
   else status = "ready";

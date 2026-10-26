@@ -49,8 +49,9 @@ test("nothing cached is not-downloaded, even if an old flag says otherwise", asy
 });
 
 test("some files missing is reported, not ready", async () => {
+  // The model file is there but its tokenizer is gone.
   const files = allKokoro();
-  delete files[kokoro.assets[3].url];
+  delete files[kokoro.assets[1].url];
   assert.equal((await checkModel(fakeCaches(files), kokoro)).status, "missing-files");
 });
 
@@ -88,4 +89,11 @@ test("removing one model leaves other models' files alone", async () => {
   await removeModel(caches, piper);
   assert.equal((await checkModel(caches, piper)).status, "not-downloaded");
   assert.equal((await checkModel(caches, kokoro)).status, "ready");
+});
+
+test("a model whose only stored files are shared with another model is not-downloaded", async () => {
+  const fp32 = kokoroModel("fp32");
+  // The 8-bit model is installed; the full-precision one shares its config and tokenizer files.
+  const r = await checkModel(fakeCaches(allKokoro()), fp32);
+  assert.equal(r.status, "not-downloaded");
 });
