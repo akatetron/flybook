@@ -6,3 +6,4 @@ dist
 flybook-site.zip
 test-results/
 playwright-report/
+e2e/zz-*.spec.ts
