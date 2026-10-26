@@ -4,6 +4,7 @@
 import { kokoro, type Clip, type ModelState } from "./kokoro";
 import { piper } from "./piper";
 import { studioVoice } from "./voices";
+import { models, modelForVoice } from "./modelStore";
 
 const isPiper = (voice: string) => voice.startsWith("piper:");
 const piperModel = (voice: string) => voice.slice("piper:".length);
@@ -12,8 +13,10 @@ export const tts = {
   generate(text: string, voice: string): Promise<Clip> {
     return isPiper(voice) ? piper.generate(text, piperModel(voice)) : kokoro.generate(text, voice);
   },
-  load(voice: string): Promise<void> {
-    return isPiper(voice) ? piper.load(piperModel(voice)) : kokoro.load();
+  async load(voice: string): Promise<void> {
+    await (isPiper(voice) ? piper.load(piperModel(voice)) : kokoro.load());
+    // Record what is really stored now (the engine may have just downloaded it).
+    void models.verify(modelForVoice(voice, kokoro.info?.device === "webgpu" ? "fp32" : "q8"));
   },
   state(voice: string): ModelState {
     return isPiper(voice) ? piper.current : kokoro.current;
@@ -26,8 +29,9 @@ export const tts = {
       b();
     };
   },
+  /** The voice's model files are on this device (checked in Cache Storage, not a flag). */
   wasDownloaded(voice: string): boolean {
-    return isPiper(voice) ? piper.wasDownloaded(piperModel(voice)) : kokoro.wasDownloaded();
+    return models.isReady(voice);
   },
   crashedBefore(voice: string): boolean {
     return isPiper(voice) ? false : kokoro.crashedBefore();

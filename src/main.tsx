@@ -1,8 +1,15 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./styles.css";
+import { models } from "./tts/modelStore";
+import { storage } from "./lib/storage";
 
 createRoot(document.getElementById("root")!).render(<App />);
+
+// Check which voice models are really stored (files, not flags) and how much
+// space the browser gives us.
+void models.ready();
+void storage.refresh();
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   navigator.serviceWorker

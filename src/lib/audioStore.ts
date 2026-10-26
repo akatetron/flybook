@@ -59,6 +59,8 @@ export async function loadClip(book: string, voice: string, index: number): Prom
 }
 
 let writesSincePrune = 0;
+/** A save failed (usually storage full); shown in Offline Storage. */
+export let storageWarning = false;
 
 export async function saveClip(book: string, voice: string, index: number, wav: Blob, seconds: number) {
   try {
@@ -73,7 +75,9 @@ export async function saveClip(book: string, voice: string, index: number, wav: 
       void prune();
     }
   } catch {
-    /* storage full or unavailable: playback still works from memory */
+    // Storage full or unavailable: playback still works from memory, but say so.
+    console.warn("Couldn't save prepared audio on this device.");
+    storageWarning = true;
   }
 }
 
@@ -102,4 +106,45 @@ export async function deleteBookAudio(book: string) {
   } catch {
     /* ignore */
   }
+}
+
+export interface AudioUsage {
+  book: string;
+  voice: string;
+  clips: number;
+  seconds: number;
+  bytes: number;
+}
+
+/** Saved audio per book and voice, from the small length records (no audio is read). */
+export async function audioUsage(): Promise<AudioUsage[]> {
+  try {
+    const rows = await (await db()).getAll("lengths");
+    const by = new Map<string, AudioUsage>();
+    for (const r of rows) {
+      const key = `${r.book}\u0000${r.voice}`;
+      const u = by.get(key) ?? { book: r.book, voice: r.voice, clips: 0, seconds: 0, bytes: 0 };
+      u.clips++;
+      u.seconds += r.seconds;
+      u.bytes += r.bytes;
+      by.set(key, u);
+    }
+    return [...by.values()];
+  } catch {
+    return [];
+  }
+}
+
+/** Deletes saved audio for one voice of a book (the book, notes and position are kept). */
+export async function deleteVoiceAudio(book: string, voice: string) {
+  const range = bookRange(book, voice);
+  const tx = (await db()).transaction(["clips", "lengths"], "readwrite");
+  await Promise.all([tx.objectStore("clips").delete(range), tx.objectStore("lengths").delete(range), tx.done]);
+}
+
+/** Saved clips of a range of sentences, in order; null where a sentence isn't prepared. */
+export async function loadClips(book: string, voice: string, start: number, end: number): Promise<(Blob | null)[]> {
+  const out: (Blob | null)[] = [];
+  for (let i = start; i < end; i++) out.push(await loadClip(book, voice, i));
+  return out;
 }

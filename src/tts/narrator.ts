@@ -13,6 +13,7 @@ import { loadClip, saveClip, savedLengths } from "../lib/audioStore";
 import type { Clip } from "./kokoro";
 import { tts } from "./engines";
 import { findSystemVoice } from "./system";
+import { models } from "./modelStore";
 
 export interface NarratorState {
   index: number;
@@ -82,6 +83,7 @@ export class Narrator {
   private switchingSrc = false;
   private unlocked = false;
   private sleepTimer: ReturnType<typeof setTimeout> | null = null;
+  private unsubscribeModels: () => void = () => undefined;
 
   constructor(opts: NarratorOptions) {
     this.opts = opts;
@@ -122,6 +124,9 @@ export class Narrator {
     this.chapterVoices = loadJSON(`flybook:chapter-voices:${opts.bookId}`, {});
     this.queue = loadJSON(`flybook:prepare-queue:${opts.bookId}`, []);
     this.setupMediaSession();
+    // Background preparation starts once the stored model files have been checked.
+    this.unsubscribeModels = models.subscribe(() => this.pump());
+    void models.ready().then(() => this.pump());
     this.pump();
   }
 
@@ -291,6 +296,7 @@ export class Narrator {
   }
 
   destroy() {
+    this.unsubscribeModels();
     this.pause();
     this.clearMemory();
     if (this.sleepTimer) clearTimeout(this.sleepTimer);

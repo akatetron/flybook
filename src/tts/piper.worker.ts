@@ -60,8 +60,17 @@ async function cachedFetch(url: string, onProgress?: (loaded: number, total: num
     onProgress?.(loaded, total);
   }
   const body = new Blob(parts as BlobPart[]);
-  const copy = new Response(body, { headers: { "content-type": res.headers.get("content-type") ?? "" } });
-  await cache?.put(url, copy.clone()).catch(() => undefined);
+  const copy = new Response(body, {
+    headers: { "content-type": res.headers.get("content-type") ?? "", "content-length": String(body.size) },
+  });
+  // A body shorter than announced means the download was cut off: don't keep it.
+  if (total && !res.headers.get("content-encoding") && body.size !== total) throw new Error("The voice download was interrupted. Try again.");
+  try {
+    await cache?.put(url, copy.clone());
+  } catch (err) {
+    // Usually storage full. The voice still works this session; say why it will download again.
+    console.warn("Couldn't save the voice on this device:", (err as Error).name);
+  }
   return copy;
 }
 
