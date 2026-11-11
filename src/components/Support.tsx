@@ -1,5 +1,6 @@
-/** The creator's PayPal.me page. Opening it is the only thing this does — no tracking. */
-export const SUPPORT_URL = "https://paypal.me/Panchal28";
+// The creator's support pages. Opening them is all these links do — no tracking.
+export const COFFEE_URL = "https://buymeacoffee.com/akatetron";
+export const PAYPAL_URL = "https://paypal.me/Panchal28";
 
 export function CoffeeIcon({ size = 18 }: { size?: number }) {
   return (
@@ -13,7 +14,7 @@ export function CoffeeIcon({ size = 18 }: { size?: number }) {
 
 export function CoffeeButton({ compact = false }: { compact?: boolean }) {
   return (
-    <a className={`coffee-btn ${compact ? "compact" : ""}`} href={SUPPORT_URL} target="_blank" rel="noopener noreferrer">
+    <a className={`coffee-btn ${compact ? "compact" : ""}`} href={COFFEE_URL} target="_blank" rel="noopener noreferrer">
       <CoffeeIcon />
       <span>Buy me a coffee</span>
     </a>
@@ -33,7 +34,12 @@ export function SupportCard() {
           Flybook is free, has no ads and never sells your data — there's no server to sell it from. It's built by one
           person. If it saved you time, a coffee keeps it growing: new voices, scanned-PDF support and the mobile app.
         </p>
-        <CoffeeButton />
+        <div className="support-actions">
+          <CoffeeButton />
+          <a className="paypal-link" href={PAYPAL_URL} target="_blank" rel="noopener noreferrer">
+            or via PayPal (@Panchal28)
+          </a>
+        </div>
       </div>
     </section>
   );

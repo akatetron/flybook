@@ -8,7 +8,7 @@
 
 Natural neural voices · highlights & notes · works offline · no account · nothing uploaded
 
-[**Open Flybook → flybookapp.in**](https://flybookapp.in/) &nbsp;·&nbsp; [☕ **Buy me a coffee**](https://paypal.me/Panchal28)
+[**Open Flybook → flybookapp.in**](https://flybookapp.in/) &nbsp;·&nbsp; [☕ **Buy me a coffee**](https://buymeacoffee.com/akatetron)
 
 ![Deploy](https://github.com/akatetron/flybook/actions/workflows/deploy.yml/badge.svg)
 ![Tests](https://img.shields.io/badge/tests-45%20unit%20%C2%B7%2018%20browser-2e7d5b)
@@ -192,7 +192,8 @@ multi-threaded voices; `public/_headers` and `vercel.json` do it on Netlify, Clo
 ## Support Flybook
 
 Flybook is free, has no ads and never sells your data — there's no server to sell it from. It's built by one person.
-If it saved you time, **[buy me a coffee ☕](https://paypal.me/Panchal28)** — it funds new voices, scanned-PDF support and
+If it saved you time, **[buy me a coffee ☕](https://buymeacoffee.com/akatetron)** (or send something via
+[PayPal @Panchal28](https://paypal.me/Panchal28)) — it funds new voices, scanned-PDF support and
 the mobile app. Stars, bug reports and sharing it with someone who'd find it useful help just as much.
 
 ## Credits & licences

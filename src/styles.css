@@ -1515,6 +1515,18 @@ p {
   font-size: 13.5px;
   box-shadow: none;
 }
+.support-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+.paypal-link {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 14.5px;
+  text-underline-offset: 3px;
+}
 .support-card {
   display: flex;
   gap: 16px;
