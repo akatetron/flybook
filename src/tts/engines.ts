@@ -3,17 +3,26 @@
 // just asks for speech in a voice.
 import { kokoro, type Clip, type ModelState } from "./kokoro";
 import { piper } from "./piper";
-import { studioVoice } from "./voices";
+import { isPhone, studioVoice } from "./voices";
 import { models, modelForVoice } from "./modelStore";
 
 const isPiper = (voice: string) => voice.startsWith("piper:");
 const piperModel = (voice: string) => voice.slice("piper:".length);
 
+/** Phones can't hold two speech engines at once: unload the other one first. */
+function makeRoom(voice: string) {
+  if (!isPhone()) return;
+  if (isPiper(voice)) kokoro.unload();
+  else piper.unload();
+}
+
 export const tts = {
   generate(text: string, voice: string): Promise<Clip> {
+    makeRoom(voice);
     return isPiper(voice) ? piper.generate(text, piperModel(voice)) : kokoro.generate(text, voice);
   },
   async load(voice: string): Promise<void> {
+    makeRoom(voice);
     await (isPiper(voice) ? piper.load(piperModel(voice)) : kokoro.load());
     // Record what is really stored now (the engine may have just downloaded it).
     void models.verify(modelForVoice(voice, kokoro.info?.device === "webgpu" ? "fp32" : "q8"));
@@ -32,6 +41,11 @@ export const tts = {
   /** The voice's model files are on this device (checked in Cache Storage, not a flag). */
   wasDownloaded(voice: string): boolean {
     return models.isReady(voice);
+  },
+  /** Frees both engines' memory (e.g. when leaving a book). Models stay cached on disk. */
+  unloadAll() {
+    kokoro.unload();
+    piper.unload();
   },
   crashedBefore(voice: string): boolean {
     return isPiper(voice) ? false : kokoro.crashedBefore();

@@ -9,7 +9,7 @@
 import type { Chapter, Segment } from "../lib/text";
 import { speakable } from "../lib/text";
 import type { Engine } from "../lib/settings";
-import { loadClip, saveClip, savedLengths } from "../lib/audioStore";
+import { deleteRange, loadClip, saveClip, savedLengths } from "../lib/audioStore";
 import type { Clip } from "./kokoro";
 import { tts } from "./engines";
 import { findSystemVoice } from "./system";
@@ -50,6 +50,8 @@ export interface NarratorOptions {
   skipCitations?: boolean;
   /** Skip reference/bibliography sections when playing through. */
   skipReferences?: boolean;
+  /** Keep saved audio of chapters before the current one (default: delete it to save space). */
+  keepFinishedAudio?: boolean;
   onPosition: (index: number) => void;
 }
 
@@ -152,6 +154,7 @@ export class Narrator {
     this.state = { ...this.state, ...patch };
     if (patch.index !== undefined && patch.index !== prevIndex) {
       this.opts.onPosition(patch.index);
+      this.dropFinished(patch.index);
       this.updateMediaMetadata();
     }
     this.listeners.forEach((fn) => fn());
@@ -303,6 +306,23 @@ export class Narrator {
     return { ready, readySeconds, total: e - s, queued: this.queue.includes(start), loaded: !!saved };
   }
 
+  /**
+   * Once the listener is two chapters past one, its saved audio is deleted
+   * (the previous chapter is kept for rewinding). Notes and position stay.
+   */
+  private dropFinished(index: number) {
+    if (this.opts.keepFinishedAudio || this.opts.engine !== "studio") return;
+    const [chapterStart] = this.chapterBounds(index);
+    const [prevStart] = this.chapterBounds(Math.max(0, chapterStart - 1));
+    if (prevStart <= 0 || prevStart === this.droppedUpTo) return;
+    this.droppedUpTo = prevStart;
+    for (const [voice, map] of this.saved) {
+      for (const i of [...map.keys()]) if (i < prevStart) map.delete(i);
+      void deleteRange(this.opts.bookId, voice, 0, prevStart);
+    }
+  }
+  private droppedUpTo = 0;
+
   /** Narration options. They apply to sentences prepared from now on. */
   setNarration(skipCitations: boolean, skipReferences: boolean) {
     this.opts.skipCitations = skipCitations;
@@ -327,6 +347,8 @@ export class Narrator {
 
   destroy() {
     this.unsubscribeModels();
+    // Preparation ends with the book; free the engines' memory.
+    tts.unloadAll();
     this.pause();
     this.clearMemory();
     if (this.sleepTimer) clearTimeout(this.sleepTimer);

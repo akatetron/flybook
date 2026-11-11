@@ -19,6 +19,8 @@ export interface Settings {
   /** Narration options for documents with citations and references. */
   skipCitations: boolean;
   skipReferences: boolean;
+  /** Keep prepared audio of chapters already listened to (off saves space). */
+  keepFinishedAudio: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -31,6 +33,7 @@ const DEFAULTS: Settings = {
   favorites: [],
   skipCitations: false,
   skipReferences: false,
+  keepFinishedAudio: false,
 };
 
 const KEY = "flybook:settings";

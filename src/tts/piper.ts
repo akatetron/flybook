@@ -7,6 +7,8 @@ type Listener = (s: ModelState) => void;
 
 const DOWNLOADED_KEY = "flybook:piper-downloaded";
 const HANG_MS = 30_000;
+/** An engine nobody has used for this long is unloaded to free memory. */
+const IDLE_MS = 4 * 60_000;
 
 function downloadedVoices(): string[] {
   try {
@@ -103,6 +105,7 @@ class PiperClient {
         this.pending.delete(msg.id);
         if (!p) break;
         clearTimeout(p.timer);
+        this.touch();
         const elapsed = (performance.now() - p.started) / 1000;
         if (msg.seconds > 0.5) {
           const sample = elapsed / msg.seconds;
@@ -120,6 +123,27 @@ class PiperClient {
         break;
       }
     }
+  }
+
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private touch() {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => {
+      if (this.pending.size === 0) this.unload();
+    }, IDLE_MS);
+  }
+
+  /** Stops the engine and frees its memory; the voice stays cached on disk. */
+  unload() {
+    if (!this.worker) return;
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = null;
+    this.reset("Voice engine unloaded to free memory.", false);
+  }
+
+  get loaded(): boolean {
+    return this.worker !== null;
   }
 
   private reset(message: string, asError: boolean) {
@@ -157,6 +181,7 @@ class PiperClient {
         if (this.pending.has(id)) this.reset("The voice engine got stuck; restarting it.", false);
       }, HANG_MS);
       this.pending.set(id, { resolve, reject, started: performance.now(), timer });
+      this.touch();
       this.worker!.postMessage({ type: "generate", id, text, voice } satisfies PiperRequest);
     });
   }

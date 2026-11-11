@@ -14,6 +14,7 @@ import {
 import { deleteBookAudio } from "../lib/audioStore";
 import { LockIcon, MoreIcon, OfflineIcon, PlayIcon, PlusIcon, WaveIcon } from "./Icons";
 import { WORDS_PER_MINUTE, formatDuration } from "../lib/format";
+import { SupportCard } from "./Support";
 
 interface LibraryProps {
   onOpen: (id: string) => void;
@@ -204,42 +205,46 @@ export function Library({ onOpen }: LibraryProps) {
 
       {books && books.length === 0 && !importing && (
         <section className="welcome">
-          <h2>
-            Turn any PDF into an <span className="grad-text">audiobook</span>.
-          </h2>
-          <p className="muted">Pick a PDF from your phone — it's read aloud with natural voices, right here.</p>
-          <label className="drop">
-            {filePicker}
-            <span className="drop-icon">
+          <div className="welcome-card">
+            <div className="wave-mark" aria-hidden>
+              {[3, 6, 10, 7, 12, 5, 9, 4, 8, 6, 3].map((h, i) => (
+                <span key={i} style={{ height: h * 2, animationDelay: `${i * 90}ms` }} />
+              ))}
+            </div>
+            <h2>Turn any PDF into an audiobook.</h2>
+            <p className="welcome-lead">
+              Natural AI voices read your documents aloud — made on your device, so nothing is ever uploaded.
+            </p>
+            <label className="drop">
+              {filePicker}
               <PlusIcon />
-            </span>
-            <span className="drop-title">Add a PDF</span>
-            <span className="muted small">From Files, iCloud Drive or Downloads</span>
-          </label>
-          <button className="sample-btn" onClick={addSample}>
-            or try a short sample story
-          </button>
+              <span>Add a PDF</span>
+            </label>
+            <p className="muted small">From Files, iCloud Drive, Downloads or your computer</p>
+            <button className="sample-btn" onClick={addSample}>
+              or listen to a short sample story
+            </button>
+          </div>
           <ul className="features">
             <li>
               <LockIcon />
-              <span>
-                <strong>Private</strong>
-                <span className="muted small">Nothing is uploaded. No account.</span>
-              </span>
+              <strong>Private</strong>
+              <span className="muted small">Nothing is uploaded. No account.</span>
             </li>
             <li>
               <WaveIcon />
-              <span>
-                <strong>Natural voices</strong>
-                <span className="muted small">Made on your phone, saved for offline.</span>
-              </span>
+              <strong>Natural voices</strong>
+              <span className="muted small">Neural voices, made on your device.</span>
             </li>
             <li>
               <OfflineIcon />
-              <span>
-                <strong>Picks up where you left off</strong>
-                <span className="muted small">Lock-screen controls and a sleep timer.</span>
-              </span>
+              <strong>Works offline</strong>
+              <span className="muted small">Prepared chapters play anywhere.</span>
+            </li>
+            <li>
+              <span className="feature-glyph" aria-hidden>✎</span>
+              <strong>Study tools</strong>
+              <span className="muted small">Highlight, take notes, export.</span>
             </li>
           </ul>
         </section>
@@ -335,6 +340,8 @@ export function Library({ onOpen }: LibraryProps) {
           </ul>
         </>
       )}
+
+      {hasBooks && <SupportCard />}
 
       {isIosBrowserTab() && hasBooks && (
         <p className="muted small tip">

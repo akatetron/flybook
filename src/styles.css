@@ -1381,7 +1381,7 @@ p {
   min-height: 100%;
 }
 .shell-main {
-  padding-bottom: calc(env(safe-area-inset-bottom) + 72px);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 76px);
 }
 .navbar {
   position: fixed;
@@ -1389,24 +1389,32 @@ p {
   left: 0;
   right: 0;
   bottom: 0;
+  padding: 6px 6px calc(env(safe-area-inset-bottom) + 6px);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border-top: 1px solid var(--line);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.nav-brand,
+.nav-end {
+  display: none;
+}
+.nav-tabs {
   display: flex;
   justify-content: space-around;
-  padding: 6px 4px calc(env(safe-area-inset-bottom) + 6px);
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  border-top: 1px solid var(--line);
-  backdrop-filter: blur(12px);
 }
 .nav-item {
   display: grid;
   justify-items: center;
-  gap: 2px;
-  min-width: 56px;
-  min-height: 48px;
-  padding: 4px 6px;
-  border-radius: var(--r-sm);
+  gap: 3px;
+  min-width: 58px;
+  min-height: 50px;
+  padding: 5px 8px;
+  border-radius: 14px;
   color: var(--muted);
   font-size: 11px;
   font-weight: 600;
+  transition: color 0.15s, background-color 0.15s;
 }
 .nav-item.on {
   color: var(--accent-strong);
@@ -1415,23 +1423,127 @@ p {
 @media (min-width: 900px) {
   .navbar {
     top: 0;
-    right: auto;
-    width: 92px;
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 6px;
-    padding: 24px 8px;
+    bottom: auto;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 24px;
     border-top: 0;
-    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--accent);
+    text-decoration: none;
+    font-family: var(--display);
+    font-size: 26px;
+    font-weight: 600;
+  }
+  .nav-brand span {
+    color: var(--text);
+  }
+  .nav-tabs {
+    gap: 4px;
+    padding: 4px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+  }
+  .nav-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 16px;
+    border-radius: 999px;
+    font-size: 14.5px;
+    color: var(--text-soft);
+  }
+  .nav-item svg {
+    width: 17px;
+    height: 17px;
+  }
+  .nav-item.on {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+  .nav-end {
+    display: flex;
+    justify-content: flex-end;
   }
   .shell-main {
-    padding-left: 92px;
+    padding-top: 66px;
     padding-bottom: 0;
+  }
+  /* The top bar carries the brand on wide screens. */
+  .shell .lib-head .brand {
+    visibility: hidden;
   }
 }
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* ---------- buy me a coffee ---------- */
+
+.coffee-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: #ffdd57;
+  color: #2b2109;
+  font-weight: 700;
+  font-size: 15px;
+  text-decoration: none;
+  box-shadow: 0 6px 18px rgba(255, 196, 0, 0.25);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.coffee-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(255, 196, 0, 0.35);
+}
+.coffee-btn.compact {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13.5px;
+  box-shadow: none;
+}
+.support-card {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin: 24px 0 14px;
+  padding: 20px;
+  border-radius: var(--r-lg);
+  background: linear-gradient(135deg, color-mix(in srgb, #ffdd57 14%, var(--surface)) 0%, var(--surface) 70%);
+  border: 1px solid color-mix(in srgb, #ffdd57 35%, var(--line));
+}
+.support-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #ffdd57;
+  color: #2b2109;
+}
+.support-body h2 {
+  margin: 0 0 6px;
+  font-family: var(--display);
+  font-size: 20px;
+}
+.support-body p {
+  margin: 0 0 14px;
+  color: var(--text-soft);
+  max-width: 58ch;
 }
 
 /* ---------- screens ---------- */
@@ -1902,5 +2014,124 @@ input[type="search"],
   * {
     transition: none !important;
     animation: none !important;
+  }
+}
+
+/* ---------- welcome (first run) ---------- */
+
+.welcome {
+  display: grid;
+  gap: 28px;
+  padding: 12px 0 24px;
+}
+.welcome-card {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 14px;
+  padding: 40px 24px 32px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.welcome-card h2 {
+  margin: 4px 0 0;
+  font-family: var(--display);
+  font-size: clamp(30px, 6vw, 42px);
+  line-height: 1.1;
+  max-width: 16ch;
+}
+.welcome-lead {
+  margin: 0 0 6px;
+  max-width: 44ch;
+  color: var(--text-soft);
+  font-size: 17px;
+}
+.wave-mark {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  color: var(--accent);
+}
+.wave-mark span {
+  width: 4px;
+  border-radius: 2px;
+  background: currentColor;
+  animation: wave 1.6s ease-in-out infinite;
+}
+@keyframes wave {
+  50% {
+    transform: scaleY(0.45);
+  }
+}
+.welcome .drop {
+  position: relative;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 28px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--gold);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 17px;
+  cursor: pointer;
+  box-shadow: var(--glow);
+}
+.welcome .drop svg {
+  width: 20px;
+  height: 20px;
+}
+.welcome .sample-btn {
+  margin-top: 4px;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.welcome .features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.welcome .features li {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--surface-2);
+  text-align: left;
+}
+.welcome .features li + li {
+  border: 0;
+}
+.welcome .features svg,
+.feature-glyph {
+  box-sizing: content-box;
+  width: 22px;
+  height: 22px;
+  padding: 9px;
+  margin-bottom: 4px;
+  border-radius: 12px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 19px;
+  line-height: 22px;
+  text-align: center;
+}
+@media (min-width: 900px) {
+  .library {
+    max-width: 880px;
+  }
+  .welcome-card {
+    padding: 56px 40px 40px;
   }
 }

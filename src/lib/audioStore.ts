@@ -160,3 +160,15 @@ export async function deleteSentenceAudio(book: string, index: number) {
     /* ignore */
   }
 }
+
+/** Deletes saved audio for sentences [start, end) of one voice (e.g. chapters already listened to). */
+export async function deleteRange(book: string, voice: string, start: number, end: number) {
+  if (end <= start) return;
+  try {
+    const range = IDBKeyRange.bound([book, voice, start], [book, voice, end - 1]);
+    const tx = (await db()).transaction(["clips", "lengths"], "readwrite");
+    await Promise.all([tx.objectStore("clips").delete(range), tx.objectStore("lengths").delete(range), tx.done]);
+  } catch {
+    /* ignore */
+  }
+}

@@ -8,7 +8,7 @@
 
 Natural neural voices · highlights & notes · works offline · no account · nothing uploaded
 
-[**Open Flybook → flybookapp.in**](https://flybookapp.in/)
+[**Open Flybook → flybookapp.in**](https://flybookapp.in/) &nbsp;·&nbsp; [☕ **Buy me a coffee**](https://paypal.me/Panchal28)
 
 ![Deploy](https://github.com/akatetron/flybook/actions/workflows/deploy.yml/badge.svg)
 ![Tests](https://img.shields.io/badge/tests-45%20unit%20%C2%B7%2018%20browser-2e7d5b)
@@ -24,6 +24,8 @@ Natural neural voices · highlights & notes · works offline · no account · no
 </div>
 
 ---
+
+<div align="center"><img src="docs/screenshots/desktop.png" width="860" alt="Flybook on a computer"></div>
 
 ## Why Flybook
 
@@ -43,6 +45,7 @@ chapter is prepared, it plays offline.
 - Queue whole chapters to prepare, each with its own voice
 - Speed, sleep timer, lock-screen & headphone controls, keyboard shortcuts
 - Picks up exactly where you left off
+- Light on memory: idle voice engines unload themselves, and audio of chapters you've finished is cleared (optional)
 
 </td>
 <td width="50%" valign="top">
@@ -185,6 +188,12 @@ multi-threaded voices; `public/_headers` and `vercel.json` do it on Netlify, Clo
 - Chapter export is **WAV only** (~2.9 MB per minute).
 - On slower devices Kokoro generates speech slower than it plays; preparing ahead or a lightweight voice fixes this.
 - iOS may pause generation while the screen is locked; already-prepared audio keeps playing.
+
+## Support Flybook
+
+Flybook is free, has no ads and never sells your data — there's no server to sell it from. It's built by one person.
+If it saved you time, **[buy me a coffee ☕](https://paypal.me/Panchal28)** — it funds new voices, scanned-PDF support and
+the mobile app. Stars, bug reports and sharing it with someone who'd find it useful help just as much.
 
 ## Credits & licences
 

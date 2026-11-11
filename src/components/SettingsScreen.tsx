@@ -1,4 +1,5 @@
 import type { Settings, Theme } from "../lib/settings";
+import { SupportCard } from "./Support";
 
 const SPEEDS = [0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
 const THEMES: { id: Theme; label: string }[] = [
@@ -47,6 +48,17 @@ export function SettingsScreen({ settings, onSettings }: { settings: Settings; o
       </section>
 
       <section className="card">
+        <h2>Storage</h2>
+        <label className="toggle">
+          <input type="checkbox" checked={settings.keepFinishedAudio} onChange={(e) => onSettings({ keepFinishedAudio: e.target.checked })} />
+          <span>
+            Keep audio of chapters I've finished
+            <span className="muted small"> — off by default: when you're two chapters past one, its prepared audio is deleted to save space. Your place and notes are always kept.</span>
+          </span>
+        </label>
+      </section>
+
+      <section className="card">
         <h2>Research and legal documents</h2>
         <label className="toggle">
           <input type="checkbox" checked={settings.skipCitations} onChange={(e) => onSettings({ skipCitations: e.target.checked })} />
@@ -84,6 +96,8 @@ export function SettingsScreen({ settings, onSettings }: { settings: Settings; o
           </li>
         </ul>
       </section>
+
+      <SupportCard />
 
       <section className="card">
         <h2>About</h2>

@@ -129,6 +129,7 @@ function ReaderView({
         speed: settings.speed,
         skipCitations: settings.skipCitations,
         skipReferences: settings.skipReferences,
+        keepFinishedAudio: settings.keepFinishedAudio,
         onPosition: savePosition,
       }),
     // Settings changes are pushed into the live narrator below instead.

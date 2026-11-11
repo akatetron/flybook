@@ -105,6 +105,8 @@ class EngineHung extends Error {}
 /** No sentence should take this long; first one after loading gets extra time. */
 const HANG_MS = 45_000;
 const FIRST_HANG_MS = 120_000;
+/** An engine nobody has used for this long is unloaded to free memory. */
+const IDLE_MS = 4 * 60_000;
 
 interface Pending {
   resolve: (c: Clip) => void;
@@ -283,6 +285,7 @@ class KokoroClient {
             this.pending.delete(msg.id);
             if (!p) break;
             clearTimeout(p.timer);
+            this.touch();
             this.servedSinceLoad++;
             const elapsed = (performance.now() - p.started) / 1000;
             if (msg.seconds > 0.5) {
@@ -323,6 +326,31 @@ class KokoroClient {
     this.worker?.terminate();
     this.worker = null;
     clear(ATTEMPT_KEY);
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = null;
+  }
+
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Frees the engine's memory after a while without requests; the model stays cached on disk. */
+  private touch() {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => {
+      if (this.pending.size === 0) this.unload();
+    }, IDLE_MS);
+  }
+
+  /** Stops the engine and frees its memory. The next request loads it again (from the device's cache). */
+  unload() {
+    if (!this.worker && !this.loadPromise) return;
+    this.teardown();
+    this.engine = null;
+    this.loadPromise = null;
+    this.set({ phase: "idle" });
+  }
+
+  get loaded(): boolean {
+    return this.worker !== null;
   }
 
   /** Drops a stuck or crashed engine; the next request loads a fresh one. */
@@ -372,6 +400,7 @@ class KokoroClient {
         this.restart(new EngineHung("The voice engine got stuck; restarting it."));
       }, limit);
       this.pending.set(id, { resolve, reject, started: performance.now(), timer });
+      this.touch();
       this.worker!.postMessage({ type: "generate", id, text, voice } satisfies WorkerRequest);
     });
   }
