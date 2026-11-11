@@ -1,4 +1,4 @@
-// Serves the production build under /flybook/, like GitHub Pages does.
+// Serves the production build at the site root, like flybookapp.in on GitHub Pages.
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
@@ -13,11 +13,7 @@ const types = {
 
 createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://x");
-  if (!url.pathname.startsWith("/flybook/")) {
-    res.writeHead(url.pathname === "/flybook" ? 301 : 404, { location: "/flybook/" }).end();
-    return;
-  }
-  let path = normalize(join(root, decodeURIComponent(url.pathname.slice("/flybook/".length))));
+  let path = normalize(join(root, decodeURIComponent(url.pathname.slice(1))));
   if (!path.startsWith(root)) return void res.writeHead(403).end();
   try {
     if ((await stat(path)).isDirectory()) path = join(path, "index.html");
@@ -27,4 +23,4 @@ createServer(async (req, res) => {
   } catch {
     res.writeHead(404).end("not found");
   }
-}).listen(port, () => console.log(`serving dist at http://localhost:${port}/flybook/`));
+}).listen(port, () => console.log(`serving dist at http://localhost:${port}/`));

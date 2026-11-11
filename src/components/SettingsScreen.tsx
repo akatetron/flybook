@@ -73,7 +73,7 @@ export function SettingsScreen({ settings, onSettings }: { settings: Settings; o
         <ul className="plain-list small">
           <li>Your documents, notes, highlights and generated audio stay in this browser. Flybook has no server and no account.</li>
           <li>
-            Flybook's network requests are: the app itself (GitHub Pages), its typefaces (Google Fonts), and — only when you
+            Flybook's network requests are: the app itself (flybookapp.in, hosted on GitHub Pages), its typefaces (Google Fonts), and — only when you
             use a voice — that voice's model files from Hugging Face (huggingface.co). No document text, notes or audio are
             sent anywhere.
           </li>

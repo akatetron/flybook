@@ -8,7 +8,7 @@
 
 Natural neural voices · highlights & notes · works offline · no account · nothing uploaded
 
-[**Open Flybook →**](https://akatetron.github.io/flybook/)
+[**Open Flybook → flybookapp.in**](https://flybookapp.in/)
 
 ![Deploy](https://github.com/akatetron/flybook/actions/workflows/deploy.yml/badge.svg)
 ![Tests](https://img.shields.io/badge/tests-45%20unit%20%C2%B7%2018%20browser-2e7d5b)
@@ -90,7 +90,7 @@ spoken — your text and notes keep everything.
 
 ## Try it in 30 seconds
 
-1. Open **[akatetron.github.io/flybook](https://akatetron.github.io/flybook/)** on your phone or computer.
+1. Open **[flybookapp.in](https://flybookapp.in/)** on your phone or computer.
 2. Tap **“or try a short sample story”** — or choose any text-based PDF.
 3. Press play. The first studio voice downloads once (about 92 MB); after that it's on your device.
 
@@ -136,7 +136,7 @@ remembered flag, and **Repair** re-downloads only damaged ones. Data normally su
 tab, but it isn't permanent: clearing site data removes it, browsers can evict it when space is short, and it isn't
 shared between browsers or devices. The Storage screen can ask the browser for persistent storage.
 
-**Network use:** the app (GitHub Pages), its typefaces (Google Fonts), and — only when you use a voice — that
+**Network use:** the app (flybookapp.in, hosted on GitHub Pages), its typefaces (Google Fonts), and — only when you use a voice — that
 voice's files from huggingface.co. Your documents, notes and audio are never sent anywhere.
 
 ## Run it yourself
@@ -147,12 +147,12 @@ npm run dev          # http://localhost:5173
 npm test             # 45 unit tests
 npm run typecheck
 npm run build        # static site in dist/
-npm run e2e          # 18 Playwright browser tests (desktop + phone) against dist/ under /flybook/
+npm run e2e          # 18 Playwright browser tests (desktop + phone) against dist/
 ```
 
 Every push to `main` runs the unit tests, the build and the browser tests, then deploys to GitHub Pages
-([`deploy.yml`](.github/workflows/deploy.yml)). Paths are relative, so `dist/` works under any folder on any static
-host. GitHub Pages can't set headers, so the service worker adds the cross-origin isolation headers needed for
+([`deploy.yml`](.github/workflows/deploy.yml)). The site is served at **flybookapp.in** (`public/CNAME`); paths are relative, so `dist/` also works under any
+folder on any static host. GitHub Pages can't set headers, so the service worker adds the cross-origin isolation headers needed for
 multi-threaded voices; `public/_headers` and `vercel.json` do it on Netlify, Cloudflare Pages and Vercel.
 
 <details>

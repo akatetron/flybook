@@ -26,7 +26,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      # Browser tests against the built site under /flybook/; a failure stops the deploy.
+      # Browser tests against the built site; a failure stops the deploy.
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
       - if: failure()

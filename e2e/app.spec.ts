@@ -22,7 +22,7 @@ async function readView(page: Page) {
   await expect(page.locator(".seg").first()).toBeVisible();
 }
 
-test("fresh visit under /flybook/ shows the library and opens the sample story without downloading a voice", async ({ page }) => {
+test("fresh visit shows the library and opens the sample story without downloading a voice", async ({ page }) => {
   const thirdParty = watchThirdParty(page);
   await page.goto("./");
   await expect(page.getByText(/Turn any PDF into an/)).toBeVisible();
