@@ -2,6 +2,7 @@
 // generated once: replaying, rewinding, re-opening a book or listening to a
 // chapter that was prepared earlier is instant and never buffers.
 import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from "idb";
+import { reportError } from "./errors";
 
 type ClipKey = [book: string, voice: string, index: number];
 
@@ -74,10 +75,10 @@ export async function saveClip(book: string, voice: string, index: number, wav: 
       writesSincePrune = 0;
       void prune();
     }
-  } catch {
+  } catch (err) {
     // Storage full or unavailable: playback still works from memory, but say so.
-    console.warn("Couldn't save prepared audio on this device.");
     storageWarning = true;
+    reportError(err, "keep prepared audio on this device (it will play now, but be prepared again next time)");
   }
 }
 

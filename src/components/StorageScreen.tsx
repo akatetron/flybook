@@ -36,12 +36,12 @@ export function StorageScreen() {
     void models.verifyAll();
   }, [refresh]);
 
-  async function act(key: string, fn: () => Promise<unknown>, done: string) {
+  async function act<T>(key: string, fn: () => Promise<T>, done: string | ((result: T) => string)) {
     setBusy(key);
     setMessage(null);
     try {
-      await fn();
-      setMessage(done);
+      const result = await fn();
+      setMessage(typeof done === "string" ? done : done(result));
     } catch (e) {
       setMessage(`That didn't work: ${(e as Error).message}`);
     } finally {
@@ -151,7 +151,19 @@ export function StorageScreen() {
                 bytes={check!.bytes}
                 checkedAt={check!.checkedAt}
                 busy={busy === model.id}
-                onRepair={() => act(model.id, () => models.repair(model), "Damaged files were removed. They download again the next time the voice is used; intact files are kept.")}
+                onRepair={() =>
+                  act(
+                    model.id,
+                    async () => {
+                      const removed = await models.repair(model);
+                      return removed;
+                    },
+                    (removed) =>
+                      removed > 0
+                        ? `Damaged files were removed (${removed}). They download again the next time you use this voice; intact files are kept.`
+                        : "No damaged files. The missing files download the next time you use this voice."
+                  )
+                }
                 onRemove={() =>
                   confirm(`Remove ${model.name}? Prepared audio, documents and notes are kept. The voice downloads again if you use it.`) &&
                   act(model.id, () => models.remove(model), `${model.name} removed.`)

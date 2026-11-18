@@ -15,6 +15,7 @@ import { deleteBookAudio } from "../lib/audioStore";
 import { LockIcon, MoreIcon, OfflineIcon, PlayIcon, PlusIcon, WaveIcon } from "./Icons";
 import { WORDS_PER_MINUTE, formatDuration } from "../lib/format";
 import { SupportCard } from "./Support";
+import { describeError, isStorageError } from "../lib/errors";
 
 interface LibraryProps {
   onOpen: (id: string) => void;
@@ -48,14 +49,22 @@ export function Library({ onOpen }: LibraryProps) {
     const name = prompt("Name the collection (for example a matter, course or project):")?.trim();
     if (!name) return;
     const c = { id: newId(), name, createdAt: Date.now() };
-    await saveCollection(c);
+    try {
+      await saveCollection(c);
+    } catch (err) {
+      return setError(describeError(err, "create the collection"));
+    }
     setCollections((list) => [...list, c].sort((a, b) => a.name.localeCompare(b.name)));
     setShelf(c.id);
   }
 
   async function moveTo(book: BookMeta, collection: string) {
     setMenuFor(null);
-    await updateBook(book.id, { collection: collection || null });
+    try {
+      await updateBook(book.id, { collection: collection || null });
+    } catch (err) {
+      setError(describeError(err, "move the document"));
+    }
     refresh();
   }
   useEffect(refresh, [refresh]);
@@ -65,21 +74,25 @@ export function Library({ onOpen }: LibraryProps) {
     const book = sampleBook();
     const id = newId();
     const now = Date.now();
-    await saveBook(
-      {
-        id,
-        title: book.title,
-        fileName: "sample",
-        pageCount: book.chapters.length,
-        segmentCount: book.segments.length,
-        words: book.words,
-        cover: sampleCover(),
-        addedAt: now,
-        openedAt: now,
-        position: 0,
-      },
-      { id, segments: book.segments, chapters: book.chapters }
-    );
+    try {
+      await saveBook(
+        {
+          id,
+          title: book.title,
+          fileName: "sample",
+          pageCount: book.chapters.length,
+          segmentCount: book.segments.length,
+          words: book.words,
+          cover: sampleCover(),
+          addedAt: now,
+          openedAt: now,
+          position: 0,
+        },
+        { id, segments: book.segments, chapters: book.chapters }
+      );
+    } catch (err) {
+      return setError(describeError(err, "add the sample story"));
+    }
     onOpen(id);
   }
 
@@ -137,8 +150,8 @@ export function Library({ onOpen }: LibraryProps) {
           ? "This PDF is password-protected. Remove the password and try again."
           : name === "InvalidPDFException" || /invalid pdf|unexpected|corrupt/i.test(message)
             ? "This file couldn't be opened — it may be damaged or not really a PDF."
-            : name === "QuotaExceededError"
-              ? "There isn't enough storage space in this browser. Free some up in Storage and try again."
+            : isStorageError(err)
+              ? describeError(err, "add this PDF")
               : message
       );
     } finally {
@@ -150,7 +163,11 @@ export function Library({ onOpen }: LibraryProps) {
   async function remove(book: BookMeta) {
     setMenuFor(null);
     if (!confirm(`Remove “${book.title}” from this device? Its text, original file, your place, highlights, notes, bookmarks and prepared audio are all deleted.`)) return;
-    await Promise.all([deleteBook(book.id), deleteBookAudio(book.id)]);
+    try {
+      await Promise.all([deleteBook(book.id), deleteBookAudio(book.id)]);
+    } catch (err) {
+      setError(describeError(err, "remove the document"));
+    }
     refresh();
   }
 

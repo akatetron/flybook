@@ -15,6 +15,7 @@ import {
 import { COLORS, bySentence, makeAnnotation } from "../lib/annotations";
 import { deleteSentenceAudio, loadClips } from "../lib/audioStore";
 import { joinWavs } from "../lib/wav";
+import { describeError, safely } from "../lib/errors";
 import { formatBytes } from "../lib/storage";
 import type { Settings } from "../lib/settings";
 import { Narrator, type NarratorState } from "../tts/narrator";
@@ -43,6 +44,7 @@ const WINDOW_STEP = 250;
 export function Reader({ bookId, startAt, settings, onSettings, onBack }: ReaderProps) {
   const [book, setBook] = useState<{ meta: BookMeta; content: BookContent } | null | undefined>(undefined);
   const [docVoice, setDocVoice] = useState<string | undefined>(undefined);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     getBook(bookId).then((b) => {
@@ -54,10 +56,13 @@ export function Reader({ bookId, startAt, settings, onSettings, onBack }: Reader
       if (voice && REMOVED_VOICES[voice]) {
         noteVoiceMigrated(voice);
         voice = migrateVoice(voice);
-        void updateBook(bookId, { voice });
+        void safely(updateBook(bookId, { voice }));
       }
       setDocVoice(voice && STUDIO_VOICES.some((v) => v.id === voice) ? voice : undefined);
-      if (b) updateBook(bookId, { openedAt: Date.now() });
+      if (b) void safely(updateBook(bookId, { openedAt: Date.now() }));
+    }).catch((err) => {
+      setLoadError(describeError(err, "open this document"));
+      setBook(null);
     });
   }, [bookId, startAt]);
 
@@ -67,7 +72,7 @@ export function Reader({ bookId, startAt, settings, onSettings, onBack }: Reader
     (patch: Partial<Settings>) => {
       if (patch.studioVoice) {
         setDocVoice(patch.studioVoice);
-        void updateBook(bookId, { voice: patch.studioVoice });
+        void safely(updateBook(bookId, { voice: patch.studioVoice }), "remember this voice");
       }
       onSettings(patch);
     },
@@ -78,7 +83,7 @@ export function Reader({ bookId, startAt, settings, onSettings, onBack }: Reader
   if (book === null)
     return (
       <div className="center">
-        <p className="muted">This document isn't on this device any more.</p>
+        <p className="muted">{loadError ?? "This document isn't on this device any more."}</p>
         <button className="btn" onClick={onBack}>
           Back to library
         </button>
@@ -115,7 +120,7 @@ function ReaderView({
     (index: number) => {
       lastPosition.current = index;
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => updateBook(meta.id, { position: index, positionAt: Date.now() }), 800);
+      saveTimer.current = setTimeout(() => void safely(updateBook(meta.id, { position: index, positionAt: Date.now() }), "save your place"), 800);
     },
     [meta.id]
   );
@@ -309,15 +314,31 @@ function ReaderView({
       await saveAnnotation(a);
       setAnnotations((list) => [...list, a]);
       return a;
-    } catch {
-      setToast("Couldn't save — your browser's storage may be full.");
+    } catch (err) {
+      setToast(describeError(err));
       return null;
     }
   }
 
   async function removeAnnotation(a: Annotation) {
-    await deleteAnnotation(a.id);
-    setAnnotations((list) => list.filter((x) => x.id !== a.id));
+    try {
+      await deleteAnnotation(a.id);
+      setAnnotations((list) => list.filter((x) => x.id !== a.id));
+    } catch (err) {
+      setToast(describeError(err, "delete that"));
+    }
+  }
+
+  /** Saves a changed annotation; on failure the change is not shown as saved. */
+  async function updateAnnotation(updated: Annotation): Promise<boolean> {
+    try {
+      await saveAnnotation(updated);
+      setAnnotations((list) => list.map((a) => (a.id === updated.id ? updated : a)));
+      return true;
+    } catch (err) {
+      setToast(describeError(err));
+      return false;
+    }
   }
 
   /** The highlight exactly covering the selection, if any. */
@@ -340,9 +361,7 @@ function ReaderView({
   async function highlight(color: HighlightColor) {
     if (!selection) return;
     if (selectedHighlight) {
-      const updated = { ...selectedHighlight, color, updatedAt: Date.now() };
-      await saveAnnotation(updated);
-      setAnnotations((list) => list.map((a) => (a.id === updated.id ? updated : a)));
+      await updateAnnotation({ ...selectedHighlight, color, updatedAt: Date.now() });
     } else await addAnnotation("highlight", selection.start, selection.end, { color });
     setSelection(null);
   }
@@ -359,9 +378,7 @@ function ReaderView({
     if (editor.annotation) {
       if (!text) await removeAnnotation(editor.annotation);
       else {
-        const updated = { ...editor.annotation, note: text, updatedAt: Date.now() };
-        await saveAnnotation(updated);
-        setAnnotations((list) => list.map((a) => (a.id === updated.id ? updated : a)));
+        if (!(await updateAnnotation({ ...editor.annotation, note: text, updatedAt: Date.now() }))) return;
       }
     } else if (text) await addAnnotation("note", selection.start, selection.end, { note: text });
     setEditor(null);
@@ -383,8 +400,8 @@ function ReaderView({
       await deleteSentenceAudio(meta.id, i);
       narrator.invalidate(i);
       setToast("Correction saved for this document");
-    } catch {
-      setToast("Couldn't save the correction.");
+    } catch (err) {
+      setToast(describeError(err, "save the correction"));
     }
     setEditor(null);
     setSelection(null);

@@ -30,3 +30,13 @@ test("export can be cancelled", async () => {
   ac.abort();
   await assert.rejects(joinWavs([clip([1])], { signal: ac.signal }), { name: "AbortError" });
 });
+
+test("a very long chapter (5,000 sentences) joins without copying every clip", async () => {
+  const one = clip(Array.from({ length: 2400 }, (_, i) => i % 100)); // 0.1 s each
+  const clips = Array.from({ length: 5000 }, () => one);
+  const t = Date.now();
+  const { blob, seconds } = await joinWavs(clips);
+  assert.equal(Math.round(seconds), 500);
+  assert.equal(blob.size, 44 + 5000 * 2400 * 2);
+  assert.ok(Date.now() - t < 10_000, "should take seconds, not minutes");
+});

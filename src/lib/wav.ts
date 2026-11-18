@@ -17,7 +17,11 @@ export class WavError extends Error {}
 
 const tag = (v: DataView, o: number) => String.fromCharCode(v.getUint8(o), v.getUint8(o + 1), v.getUint8(o + 2), v.getUint8(o + 3));
 
-export function parseWav(buf: ArrayBuffer): ParsedWav {
+/**
+ * Reads a WAV header. `fileSize` is the whole file's size when `buf` holds only
+ * its beginning (the header), so the data length isn't cut to what was read.
+ */
+export function parseWav(buf: ArrayBuffer, fileSize = buf.byteLength): ParsedWav {
   const v = new DataView(buf);
   if (buf.byteLength < 44 || tag(v, 0) !== "RIFF" || tag(v, 8) !== "WAVE") throw new WavError("Not a WAV file");
   let fmt: WavFormat | null = null;
@@ -30,7 +34,7 @@ export function parseWav(buf: ArrayBuffer): ParsedWav {
       fmt = { channels: v.getUint16(body + 2, true), sampleRate: v.getUint32(body + 4, true), bitsPerSample: v.getUint16(body + 14, true) };
     } else if (id === "data") {
       if (!fmt) throw new WavError("WAV data before its format");
-      return { ...fmt, dataOffset: body, dataLength: Math.min(size, buf.byteLength - body) };
+      return { ...fmt, dataOffset: body, dataLength: Math.max(0, Math.min(size, fileSize - body)) };
     }
     o = body + size + (size % 2);
   }
@@ -69,7 +73,7 @@ export async function joinWavs(
   let length = 0;
   for (const [i, clip] of clips.entries()) {
     if (opts.signal?.aborted) throw new DOMException("Export cancelled", "AbortError");
-    const wav = parseWav(await clip.slice(0, Math.min(clip.size, 4096)).arrayBuffer().then((head) => fullIfNeeded(head, clip)));
+    const wav = parseWav(await clip.slice(0, Math.min(clip.size, 4096)).arrayBuffer().then((head) => fullIfNeeded(head, clip)), clip.size);
     if (format && (wav.sampleRate !== format.sampleRate || wav.channels !== format.channels || wav.bitsPerSample !== format.bitsPerSample)) {
       throw new WavError("These sentences were made with different audio formats (different voices?) and can't be joined");
     }
@@ -91,7 +95,7 @@ export async function joinWavs(
 /** The header usually fits in the first 4 KB; if a large extra chunk pushes it further, read the whole clip. */
 async function fullIfNeeded(head: ArrayBuffer, clip: Blob): Promise<ArrayBuffer> {
   try {
-    parseWav(head);
+    parseWav(head, clip.size);
     return head;
   } catch {
     return clip.arrayBuffer();

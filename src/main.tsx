@@ -8,7 +8,9 @@ import "./styles.css";
 import { models } from "./tts/modelStore";
 import { storage } from "./lib/storage";
 import { watchForUpdates } from "./lib/swUpdate";
+import { installGlobalHandlers } from "./lib/errors";
 
+installGlobalHandlers();
 createRoot(document.getElementById("root")!).render(<App />);
 
 // Check which voice models are really stored (files, not flags) and how much

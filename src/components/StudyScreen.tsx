@@ -11,6 +11,7 @@ import {
   type HighlightColor,
 } from "../lib/db";
 import { COLORS, download, filterAnnotations, locate, toCSV, toJSON, toMarkdown } from "../lib/annotations";
+import { describeError } from "../lib/errors";
 
 const KINDS: { id: AnnotationKind; label: string }[] = [
   { id: "highlight", label: "Highlights" },
@@ -70,15 +71,23 @@ export function StudyScreen({ onOpen }: { onOpen: (id: string, at?: number) => v
 
   async function saveEdit(a: Annotation) {
     const updated = { ...a, note: draft.trim(), updatedAt: Date.now() };
-    await saveAnnotation(updated);
-    setItems((list) => list?.map((x) => (x.id === a.id ? updated : x)) ?? null);
-    setEditing(null);
+    try {
+      await saveAnnotation(updated);
+      setItems((list) => list?.map((x) => (x.id === a.id ? updated : x)) ?? null);
+      setEditing(null);
+    } catch (err) {
+      setMessage(describeError(err));
+    }
   }
 
   async function remove(a: Annotation) {
     if (!confirm("Delete this " + (a.kind === "bookmark" ? "bookmark" : a.kind) + "?")) return;
-    await deleteAnnotation(a.id);
-    setItems((list) => list?.filter((x) => x.id !== a.id) ?? null);
+    try {
+      await deleteAnnotation(a.id);
+      setItems((list) => list?.filter((x) => x.id !== a.id) ?? null);
+    } catch (err) {
+      setMessage(describeError(err, "delete that"));
+    }
   }
 
   function exportAs(format: "md" | "json" | "csv") {

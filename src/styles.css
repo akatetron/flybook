@@ -2256,3 +2256,27 @@ mark.todo {
   font-size: 13.5px;
   color: var(--muted);
 }
+
+/* ---------- error banner ---------- */
+
+.error-toast {
+  position: fixed;
+  z-index: 42;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 84px);
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: min(620px, calc(100% - 24px));
+  padding: 12px 14px;
+  border-radius: var(--r);
+  background: var(--surface);
+  border: 1px solid var(--danger);
+  box-shadow: var(--shadow-lg);
+  font-size: 14px;
+}
+.error-toast span {
+  flex: 1 1 260px;
+}

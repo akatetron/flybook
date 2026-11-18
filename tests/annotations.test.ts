@@ -62,3 +62,9 @@ test("CSV quotes commas and quotes and defuses formulas", () => {
   assert.ok(row.includes('"He said ""no"", then left."'));
   assert.ok(row.includes(`"'=SUM(A1)"`));
 });
+
+test("exports with no annotations are valid and empty", () => {
+  assert.equal(toMarkdown([], book).trim(), "# Flybook notes");
+  assert.deepEqual(JSON.parse(toJSON([], book)).annotations, []);
+  assert.equal(toCSV([], book), "document,kind,page,sentence,quote,color,note,created,modified\r\n");
+});
