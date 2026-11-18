@@ -58,7 +58,7 @@ TextToSpeech in the mobile app). Flybook doesn't distribute them; their use is g
 | React, Expo, React Native | MIT | App frameworks |
 | idb | ISC | Web: IndexedDB |
 
-## espeak-ng and the GPL — decision needed
+## espeak-ng and the GPL — decided: the web app is GPL-3.0-or-later
 
 **The situation.** espeak-ng, which turns text into the sounds the voices pronounce, is licensed GPL-3.0. The website
 doesn't install it directly: it is compiled to WebAssembly *inside* `phonemizer` (Kokoro) and
@@ -86,7 +86,10 @@ beyond the GPL. Selling is allowed; keeping the app's code closed while shipping
 3. **Drop Piper on the web** (and do option 2 for Kokoro). Removes espeak-ng entirely. Older phones lose the
    lightweight voices and rely on Kokoro (slow on weak CPUs) or the built-in voices.
 
-Nothing in the code has been changed for this. **Decide before selling anything on the website.**
+**Decision (Nov 2026): option 1.** The web app is licensed GPL-3.0-or-later (`LICENSE`, `package.json`), its source is
+public on GitHub, and the app links to it (Settings → About, Terms). Flybook is funded by donations, which the GPL
+allows. All other dependencies (MIT, Apache-2.0, ISC, OFL) are compatible with GPL-3.0. The mobile app (`mobile/`)
+contains no GPL code and is not covered. Revisit only if a closed-source paid web version is ever wanted (options 2–3).
 
 ## Attribution required
 

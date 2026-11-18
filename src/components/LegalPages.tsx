@@ -3,6 +3,7 @@
 //
 // TODO(owner): fill in the items marked TODO before taking payments.
 import { COFFEE_URL, PAYPAL_URL } from "./Support";
+import { LICENSE_NAME, SOURCE_URL } from "../config";
 
 const UPDATED = "18 November 2026";
 
@@ -112,6 +113,16 @@ export function TermsPage() {
       <p>
         Your documents, notes and audio remain yours and stay on your device. We never receive them. Back up anything
         important: browser storage can be cleared or evicted, and we can't recover it.
+      </p>
+
+      <h2>Licence and source code</h2>
+      <p>
+        Flybook's web app is free software, licensed under the {LICENSE_NAME}. You may use, study, share and change it
+        under that licence; the complete source code is at{" "}
+        <a href={SOURCE_URL} target="_blank" rel="noopener noreferrer">
+          {SOURCE_URL.replace("https://", "")}
+        </a>
+        . These terms don't restrict any right the licence gives you.
       </p>
 
       <h2>Voices and third-party components</h2>

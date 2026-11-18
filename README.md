@@ -205,6 +205,13 @@ If it saved you time, **[buy me a coffee ☕](https://buymeacoffee.com/akatetron
 [PayPal @Panchal28](https://paypal.me/Panchal28)) — it funds new voices, scanned-PDF support and
 the mobile app. Stars, bug reports and sharing it with someone who'd find it useful help just as much.
 
+## Licence
+
+The Flybook web app is free software under the **GNU General Public License v3.0 or later** — see [LICENSE](LICENSE).
+You may use, study, share and modify it under those terms. It has to be: its voices' pronunciation step uses
+espeak-ng, which is GPL-3.0 (details in [docs/LICENSES.md](docs/LICENSES.md)). The native mobile app in `mobile/`
+contains no GPL code and is not covered by this licence.
+
 ## Credits & licences
 
 [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0) via `kokoro-js` (Apache-2.0) ·

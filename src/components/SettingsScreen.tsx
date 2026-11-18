@@ -1,5 +1,6 @@
 import type { Settings, Theme } from "../lib/settings";
 import { SupportCard } from "./Support";
+import { LICENSE_NAME, SOURCE_URL } from "../config";
 
 const SPEEDS = [0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
 const THEMES: { id: Theme; label: string }[] = [
@@ -111,6 +112,13 @@ export function SettingsScreen({ settings, onSettings }: { settings: Settings; o
         <p className="small">
           Voices: Kokoro-82M (Apache-2.0) and Piper voices (licences vary by voice — shown in Voice Studio). PDF reading:
           pdf.js (Apache-2.0). Kokoro's pronunciation step uses espeak-ng (GPL-3.0) through the phonemizer package.
+        </p>
+              <p className="small">
+          Flybook is free software under the <a href={`${SOURCE_URL}/blob/main/LICENSE`} target="_blank" rel="noopener noreferrer">{LICENSE_NAME}</a> licence.{" "}
+          <a href={SOURCE_URL} target="_blank" rel="noopener noreferrer">
+            Get the source code
+          </a>
+          .
         </p>
       </section>
     </div>
