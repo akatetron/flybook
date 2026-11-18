@@ -9,6 +9,7 @@ import { SettingsScreen } from "./components/SettingsScreen";
 import { useSettings } from "./lib/settings";
 import { applyTheme } from "./lib/theme";
 import { UpdatePrompt } from "./components/UpdatePrompt";
+import { VoiceNotice } from "./components/VoiceNotice";
 
 // Hash routing so the phone's back button/gesture works and the site can live
 // on any static host (GitHub Pages under /flybook/) without rewrite rules.
@@ -55,6 +56,7 @@ export function App() {
     return (
       <>
         <UpdatePrompt />
+        <VoiceNotice route={location.hash} />
         <Reader
         key={route.book}
         bookId={route.book}
@@ -70,6 +72,7 @@ export function App() {
   return (
     <div className="shell">
       <UpdatePrompt />
+      <VoiceNotice route={location.hash} />
       <NavBar tab={route.tab} onChange={go} />
       <div className="shell-main">
         {route.tab === "library" && <Library onOpen={open} />}

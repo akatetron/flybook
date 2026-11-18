@@ -183,7 +183,13 @@ export function VoiceStudio({ settings, onSettings }: { settings: Settings; onSe
                         : "Installed on this device"
                       : `${check ? STATUS_LABEL[check.status] : "Checking…"} · ${tts.downloadLabel(v.id)}`}
                   </p>
-                  <p className="muted tiny">Licence: {model.license}</p>
+                  <p className="muted tiny">
+                    Licence:{" "}
+                    <a className="licence-link" href={v.license.url} target="_blank" rel="noopener noreferrer">
+                      {v.license.name}
+                    </a>
+                  </p>
+                  {v.license.commercial !== "yes" && <span className="not-cleared">Not cleared for commercial use</span>}
                   <div className="voice-card-actions">
                     <button className="btn small" onClick={() => (playing === v.id ? stop() : preview(v))} disabled={busy !== null && busy !== v.id}>
                       {busy === v.id ? "Making preview…" : playing === v.id ? "Stop" : "Preview"}

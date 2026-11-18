@@ -1,7 +1,7 @@
 // Small per-device preferences. localStorage can throw (private mode,
 // blocked storage), so every access is guarded and falls back to defaults.
 import { useCallback, useState } from "react";
-import { DEFAULT_PHONE_VOICE, defaultVoice, isPhone, studioVoice } from "../tts/voices";
+import { DEFAULT_PHONE_VOICE, REMOVED_VOICES, defaultVoice, isPhone, migrateVoice, noteVoiceMigrated, studioVoice } from "../tts/voices";
 
 export type Engine = "studio" | "system";
 
@@ -43,6 +43,13 @@ export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
     const saved: Settings = raw ? { ...DEFAULTS, ...JSON.parse(raw) } : DEFAULTS;
+    // Voices withdrawn for licence reasons move to their closest licensed replacement.
+    if (REMOVED_VOICES[saved.studioVoice]) {
+      noteVoiceMigrated(saved.studioVoice);
+      const next = { ...saved, studioVoice: migrateVoice(saved.studioVoice), favorites: saved.favorites.map(migrateVoice) };
+      localStorage.setItem(KEY, JSON.stringify(next));
+      return next;
+    }
     // Phones that were set to a heavy Kokoro voice move to a fast Piper voice
     // once (Kokoro can't keep up on phones); they can still pick Kokoro again.
     if (isPhone() && studioVoice(saved.studioVoice).engine === "kokoro" && !localStorage.getItem(MIGRATED)) {

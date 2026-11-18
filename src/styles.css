@@ -2176,3 +2176,40 @@ input[type="search"],
     bottom: auto;
   }
 }
+
+/* ---------- licence notice ---------- */
+
+.voice-notice {
+  position: fixed;
+  z-index: 41;
+  left: 50%;
+  top: calc(env(safe-area-inset-top) + 12px);
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: min(640px, calc(100% - 24px));
+  padding: 12px 14px;
+  border-radius: var(--r);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  box-shadow: var(--shadow-lg);
+  font-size: 14px;
+}
+.voice-notice p {
+  margin: 0;
+  flex: 1;
+}
+.licence-link {
+  color: var(--muted);
+}
+.not-cleared {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+  font-size: 11.5px;
+  font-weight: 600;
+}

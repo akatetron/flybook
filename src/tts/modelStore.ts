@@ -1,12 +1,12 @@
 // Live view of which speech models are really on this device. Checked against
 // Cache Storage at startup and after every download, never against flags.
-import { STUDIO_VOICES } from "./voices";
+import { ALL_VOICES, REMOVED_VOICES, STUDIO_VOICES } from "./voices";
 import {
   checkModel,
   kokoroModel,
   kokoroVoiceAsset,
   checkAsset,
-  piperModel,
+  piperModel as piperFiles,
   removeModel,
   repairModel,
   type CacheStorageLike,
@@ -19,6 +19,12 @@ const LEGACY_FLAGS = ["flybook:model-downloaded", "flybook:model-downloaded-gpu"
 
 const browserCaches = (): CacheStorageLike | null =>
   typeof caches === "undefined" ? null : (caches as unknown as CacheStorageLike);
+
+/** A Piper voice's files, labelled with its licence from the catalogue. */
+function piperModel(voice: string): ModelInfo {
+  const license = ALL_VOICES.find((v) => v.id === `piper:${voice}`)?.license.name;
+  return piperFiles(voice, license);
+}
 
 export function allModels(): ModelInfo[] {
   const piperVoices = STUDIO_VOICES.filter((v) => v.engine === "piper").map((v) => v.id.slice("piper:".length));
@@ -80,6 +86,12 @@ class ModelStore {
   async verifyAll(): Promise<void> {
     await Promise.all(allModels().map((m) => this.verify(m)));
     const store = browserCaches();
+    // Free the space of voices withdrawn for licence reasons (~60 MB each).
+    if (store) {
+      for (const id of Object.keys(REMOVED_VOICES)) {
+        await removeModel(store, piperModel(id.slice("piper:".length))).catch(() => undefined);
+      }
+    }
     if (store) {
       await Promise.all(
         STUDIO_VOICES.filter((v) => v.engine === "kokoro").map(async (v) => {

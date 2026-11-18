@@ -14,6 +14,7 @@ import type { Clip } from "./kokoro";
 import { tts } from "./engines";
 import { findSystemVoice } from "./system";
 import { models } from "./modelStore";
+import { REMOVED_VOICES, migrateVoice, noteVoiceMigrated } from "./voices";
 import { referenceSections, stripCitations } from "../../shared/narration";
 
 export interface NarratorState {
@@ -132,6 +133,16 @@ export class Narrator {
     });
     this.setNarration(!!opts.skipCitations, !!opts.skipReferences);
     this.chapterVoices = loadJSON(`flybook:chapter-voices:${opts.bookId}`, {});
+    // Chapter voices withdrawn for licence reasons move to their replacement.
+    let migrated = false;
+    for (const [start, voice] of Object.entries(this.chapterVoices)) {
+      if (REMOVED_VOICES[voice]) {
+        noteVoiceMigrated(voice);
+        this.chapterVoices[Number(start)] = migrateVoice(voice);
+        migrated = true;
+      }
+    }
+    if (migrated) saveJSON(`flybook:chapter-voices:${opts.bookId}`, this.chapterVoices);
     this.queue = loadJSON(`flybook:prepare-queue:${opts.bookId}`, []);
     this.setupMediaSession();
     // Background preparation starts once the stored model files have been checked.

@@ -105,15 +105,16 @@ export function kokoroVoiceAsset(voice: string): ModelAsset {
   return { url: `${KOKORO_REPO}/voices/${voice}.bin`, cache: KOKORO_VOICE_CACHE, required: true };
 }
 
-export function piperModel(voice: string): ModelInfo {
+/** A Piper voice's model files. `license` comes from the voice catalogue (voices.ts). */
+export function piperModel(voice: string, license = "Unverified — check the voice's model card"): ModelInfo {
   const path = piperPath(voice);
   return {
     id: `piper:${voice}`,
     engine: "piper",
     version: "1",
     name: `Piper ${voice}`,
-    // Each Piper voice has its own licence, set by its training data; see PIPER_LICENSES.
-    license: PIPER_LICENSES[voice] ?? "Unverified — check the voice's model card",
+    // Each Piper voice has its own licence, set by its training data (docs/LICENSES.md).
+    license,
     attribution: "Piper voices by the Rhasspy project (rhasspy/piper-voices)",
     approxMB: 63,
     assets: [
@@ -122,15 +123,6 @@ export function piperModel(voice: string): ModelInfo {
     ],
   };
 }
-
-/**
- * Licences of the Piper voices' training data, where we have checked them.
- * Voices not listed here are unverified and are labelled as such in the app.
- */
-export const PIPER_LICENSES: Record<string, string> = {
-  "en_US-lessac-medium": "Blizzard 2013 (Lessac) data — research use only, not for commercial use",
-  "en_US-ryan-medium": "CC BY-NC-SA 4.0 — non-commercial",
-};
 
 // ---------- Verification ----------
 

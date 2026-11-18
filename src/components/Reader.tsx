@@ -19,7 +19,7 @@ import { formatBytes } from "../lib/storage";
 import type { Settings } from "../lib/settings";
 import { Narrator, type NarratorState } from "../tts/narrator";
 import { tts } from "../tts/engines";
-import { STUDIO_VOICES, studioVoice } from "../tts/voices";
+import { REMOVED_VOICES, STUDIO_VOICES, migrateVoice, noteVoiceMigrated, studioVoice } from "../tts/voices";
 import { findSystemVoice } from "../tts/system";
 import { WORDS_PER_MINUTE, formatDuration } from "../lib/format";
 import { Sheet } from "./Sheet";
@@ -50,7 +50,13 @@ export function Reader({ bookId, startAt, settings, onSettings, onBack }: Reader
         b = { ...b, meta: { ...b.meta, position: startAt } };
       }
       setBook(b);
-      setDocVoice(b?.meta.voice && STUDIO_VOICES.some((v) => v.id === b!.meta.voice) ? b.meta.voice : undefined);
+      let voice = b?.meta.voice;
+      if (voice && REMOVED_VOICES[voice]) {
+        noteVoiceMigrated(voice);
+        voice = migrateVoice(voice);
+        void updateBook(bookId, { voice });
+      }
+      setDocVoice(voice && STUDIO_VOICES.some((v) => v.id === voice) ? voice : undefined);
       if (b) updateBook(bookId, { openedAt: Date.now() });
     });
   }, [bookId, startAt]);

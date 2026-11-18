@@ -10,4 +10,10 @@ FlyBook for iOS and Android includes or downloads the following. Full licence te
 | PdfBox-Android (Tom Roush), with Bouncy Castle | PDF text on Android | Apache-2.0; Bouncy Castle licence (MIT-style) |
 | Expo SDK, React Native, React | App framework | MIT |
 
-No GPL code is included: the studio voices use the misaki dictionaries instead of espeak-ng.
+Not included: Piper voices (website only) and espeak-ng (GPL-3.0). The studio voices' pronunciation uses the misaki
+dictionaries instead, so the mobile app contains no GPL code. Built-in phone voices are provided by iOS / Android, not
+by FlyBook.
+
+The six Kokoro voices the app offers (Heart, Bella, Nicole, Michael, Fenrir, Puck) are Apache-2.0 and cleared for
+commercial use. Licence sources and checks: `docs/LICENSES.md` in
+the repository.
