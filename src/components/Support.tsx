@@ -1,6 +1,8 @@
-// The creator's support pages. Opening them is all these links do — no tracking.
-export const COFFEE_URL = "https://buymeacoffee.com/akatetron";
-export const PAYPAL_URL = "https://paypal.me/Panchal28";
+import { SUPPORT_LINKS } from "../config";
+
+// The creator's support pages (set in src/config.ts). Opening them is all these links do — no tracking.
+export const COFFEE_URL = SUPPORT_LINKS.coffee.url;
+export const PAYPAL_URL = SUPPORT_LINKS.paypal.url;
 
 export function CoffeeIcon({ size = 18 }: { size?: number }) {
   return (
@@ -37,7 +39,7 @@ export function SupportCard() {
         <div className="support-actions">
           <CoffeeButton />
           <a className="paypal-link" href={PAYPAL_URL} target="_blank" rel="noopener noreferrer">
-            or via PayPal (@Panchal28)
+            or via {SUPPORT_LINKS.paypal.label}
           </a>
         </div>
       </div>
