@@ -158,9 +158,13 @@ npm run e2e          # 18 Playwright browser tests (desktop + phone) against dis
 ```
 
 Every push to `main` runs the unit tests, the build and the browser tests, then deploys to GitHub Pages
-([`deploy.yml`](.github/workflows/deploy.yml)). The site is served at **flybookapp.in** (`public/CNAME`); paths are relative, so `dist/` also works under any
-folder on any static host. GitHub Pages can't set headers, so the service worker adds the cross-origin isolation headers needed for
-multi-threaded voices; `public/_headers` and `vercel.json` do it on Netlify, Cloudflare Pages and Vercel.
+([`deploy.yml`](.github/workflows/deploy.yml)) at **flybookapp.in** (`public/CNAME`). Paths are relative, so `dist/`
+also works from any sub-folder on any static host (a browser test checks this).
+
+GitHub Pages can't set headers, so the service worker adds the cross-origin isolation headers that multi-threaded
+voices need. `public/_headers` does the same on Netlify or Cloudflare Pages and is ignored by GitHub Pages. For Vercel,
+add a `vercel.json` with those three headers (`Cross-Origin-Opener-Policy: same-origin`,
+`Cross-Origin-Embedder-Policy: require-corp`, `Cross-Origin-Resource-Policy: same-origin`) for `/(.*)`.
 
 <details>
 <summary><b>Code map</b></summary>

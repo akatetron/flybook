@@ -1,5 +1,9 @@
-# Netlify / Cloudflare Pages: cross-origin isolation lets the on-device
-# voice engine use multiple CPU cores (much faster narration on phones).
+# NOT USED on GitHub Pages (flybookapp.in), which ignores this file; there the
+# service worker (src/sw.template.js) adds these headers itself.
+#
+# For alternative hosts that read a _headers file (Netlify, Cloudflare Pages):
+# cross-origin isolation lets the on-device voice engines use several CPU
+# cores, which makes narration much faster.
 /*
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp
