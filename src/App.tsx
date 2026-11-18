@@ -6,6 +6,7 @@ import { StudyScreen } from "./components/StudyScreen";
 import { VoiceStudio } from "./components/VoiceStudio";
 import { StorageScreen } from "./components/StorageScreen";
 import { SettingsScreen } from "./components/SettingsScreen";
+import { PrivacyPage, TermsPage } from "./components/LegalPages";
 import { useSettings } from "./lib/settings";
 import { applyTheme } from "./lib/theme";
 import { UpdatePrompt } from "./components/UpdatePrompt";
@@ -13,12 +14,14 @@ import { VoiceNotice } from "./components/VoiceNotice";
 
 // Hash routing so the phone's back button/gesture works and the site can live
 // on any static host (GitHub Pages under /flybook/) without rewrite rules.
-//   #/book/<id>[?at=<sentence>]   #/study   #/voices   #/storage   #/settings
-type Route = { tab: Tab } | { book: string; at: number | null };
+//   #/book/<id>[?at=<sentence>]   #/study   #/voices   #/storage   #/settings   #/privacy   #/terms
+type Route = { tab: Tab } | { book: string; at: number | null } | { page: "privacy" | "terms" };
 
 function readRoute(): Route {
   const book = location.hash.match(/^#\/book\/([\w-]+)(?:\?at=(\d+))?$/);
   if (book) return { book: book[1], at: book[2] ? Number(book[2]) : null };
+  const page = location.hash.match(/^#\/(privacy|terms)$/)?.[1] as "privacy" | "terms" | undefined;
+  if (page) return { page };
   const tab = location.hash.match(/^#\/(study|voices|storage|settings)$/)?.[1] as Tab | undefined;
   return { tab: tab ?? "library" };
 }
@@ -69,17 +72,19 @@ export function App() {
     );
   }
 
+  const tab: Tab = "tab" in route ? route.tab : "settings";
   return (
     <div className="shell">
       <UpdatePrompt />
       <VoiceNotice route={location.hash} />
-      <NavBar tab={route.tab} onChange={go} />
+      <NavBar tab={tab} onChange={go} />
       <div className="shell-main">
-        {route.tab === "library" && <Library onOpen={open} />}
-        {route.tab === "study" && <StudyScreen onOpen={open} />}
-        {route.tab === "voices" && <VoiceStudio settings={settings} onSettings={updateSettings} />}
-        {route.tab === "storage" && <StorageScreen />}
-        {route.tab === "settings" && <SettingsScreen settings={settings} onSettings={updateSettings} />}
+        {"page" in route && (route.page === "privacy" ? <PrivacyPage /> : <TermsPage />)}
+        {"tab" in route && route.tab === "library" && <Library onOpen={open} />}
+        {"tab" in route && route.tab === "study" && <StudyScreen onOpen={open} />}
+        {"tab" in route && route.tab === "voices" && <VoiceStudio settings={settings} onSettings={updateSettings} />}
+        {"tab" in route && route.tab === "storage" && <StorageScreen />}
+        {"tab" in route && route.tab === "settings" && <SettingsScreen settings={settings} onSettings={updateSettings} />}
       </div>
     </div>
   );

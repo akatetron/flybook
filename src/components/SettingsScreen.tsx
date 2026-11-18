@@ -85,8 +85,8 @@ export function SettingsScreen({ settings, onSettings }: { settings: Settings; o
         <ul className="plain-list small">
           <li>Your documents, notes, highlights and generated audio stay in this browser. Flybook has no server and no account.</li>
           <li>
-            Flybook's network requests are: the app itself (flybookapp.in, hosted on GitHub Pages), its typefaces (Google Fonts), and — only when you
-            use a voice — that voice's model files from Hugging Face (huggingface.co). No document text, notes or audio are
+            Flybook's network requests are: the app itself (flybookapp.in, hosted on GitHub Pages; its typefaces are bundled) and —
+            only when you use a voice — that voice's model files from Hugging Face (huggingface.co). No document text, notes or audio are
             sent anywhere.
           </li>
           <li>There is no analytics or tracking.</li>
@@ -98,6 +98,13 @@ export function SettingsScreen({ settings, onSettings }: { settings: Settings; o
       </section>
 
       <SupportCard />
+
+      <section className="card">
+        <h2>Legal</h2>
+        <p className="legal-links">
+          <a href="#/privacy">Privacy policy</a> · <a href="#/terms">Terms of use</a>
+        </p>
+      </section>
 
       <section className="card">
         <h2>About</h2>

@@ -1,5 +1,9 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+// Typefaces are bundled with the app (SIL OFL 1.1), so it makes no requests to font services.
+import "@fontsource-variable/inter/wght.css";
+import "@fontsource-variable/fraunces/opsz.css";
+import "@fontsource-variable/literata/opsz.css";
 import "./styles.css";
 import { models } from "./tts/modelStore";
 import { storage } from "./lib/storage";

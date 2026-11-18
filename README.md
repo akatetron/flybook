@@ -143,8 +143,9 @@ remembered flag, and **Repair** re-downloads only damaged ones. Data normally su
 tab, but it isn't permanent: clearing site data removes it, browsers can evict it when space is short, and it isn't
 shared between browsers or devices. The Storage screen can ask the browser for persistent storage.
 
-**Network use:** the app (flybookapp.in, hosted on GitHub Pages), its typefaces (Google Fonts), and — only when you use a voice — that
-voice's files from huggingface.co. Your documents, notes and audio are never sent anywhere.
+**Network use:** the app itself (flybookapp.in, hosted on GitHub Pages; typefaces are bundled) and — only when you use a
+voice — that voice's files from huggingface.co. Your documents, notes and audio are never sent anywhere.
+Full details: [privacy policy](https://flybookapp.in/#/privacy) · [terms](https://flybookapp.in/#/terms).
 
 ## Run it yourself
 

@@ -1,12 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
-/** Requests to anything other than this site and Google Fonts. */
+/** Requests to anything other than this site. */
 function watchThirdParty(page: Page) {
   const seen: string[] = [];
   page.on("request", (r) => {
     const url = new URL(r.url());
-    if (url.hostname !== "localhost" && !url.hostname.endsWith("fonts.googleapis.com") && !url.hostname.endsWith("fonts.gstatic.com")) seen.push(r.url());
+    if (url.protocol.startsWith("http") && url.hostname !== "localhost") seen.push(r.url());
   });
   return seen;
 }
@@ -30,7 +30,8 @@ test("fresh visit shows the library and opens the sample story without downloadi
   await expect(page.locator(".np-now")).not.toBeEmpty();
   // Opening a book must never start a model download on its own.
   await page.waitForTimeout(1500);
-  expect(thirdParty.filter((u) => u.includes("huggingface"))).toEqual([]);
+  // No third-party requests at all (typefaces are bundled; no analytics).
+  expect(thirdParty).toEqual([]);
 });
 
 test("a highlight, note and bookmark survive a reload and appear in Study", async ({ page }) => {
@@ -150,4 +151,14 @@ test("after one visit the app and a saved book open offline", async ({ page, con
   await page.getByText("The Lighthouse Library").first().click();
   await expect(page.locator(".np-now")).not.toBeEmpty();
   await context.setOffline(false);
+});
+
+test("privacy and terms pages open from Settings and the library", async ({ page }) => {
+  await page.goto("./");
+  await page.locator(".lib-footer").getByRole("link", { name: "Privacy" }).click();
+  await expect(page.getByRole("heading", { name: "Privacy policy" })).toBeVisible();
+  await expect(page.getByText(/huggingface\.co/).first()).toBeVisible();
+  await page.goto("./#/settings");
+  await page.getByRole("link", { name: "Terms of use" }).click();
+  await expect(page.getByRole("heading", { name: "Terms of use" })).toBeVisible();
 });

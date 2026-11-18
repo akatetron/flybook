@@ -349,6 +349,10 @@ export function Library({ onOpen }: LibraryProps) {
           home-screen app keeps them.
         </p>
       )}
+
+      <footer className="lib-footer">
+        <a href="#/privacy">Privacy</a> · <a href="#/terms">Terms</a> · <a href="#/settings">Settings</a>
+      </footer>
     </div>
   );
 }
