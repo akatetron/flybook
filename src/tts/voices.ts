@@ -1,6 +1,7 @@
-// The voices Flybook offers, from two on-device engines:
-//  - Piper: small neural voices that run faster than real time on phones.
-//  - Kokoro: the most natural voices, but heavy — best on computers.
+// The voices Flybook offers, from two on-device engines (plus the browser's
+// built-in "instant" voices, see system.ts):
+//  - Studio (Kokoro): the most natural voices, but heavy — best on computers.
+//  - Lightweight (Piper): small voices that run faster than real time on phones.
 export type VoiceEngineKind = "piper" | "kokoro";
 
 /**

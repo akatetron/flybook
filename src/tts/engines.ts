@@ -66,6 +66,6 @@ export const tts = {
     return isPiper(voice) ? "about 60 MB" : kokoro.downloadLabel;
   },
   engineName(voice: string): string {
-    return studioVoice(voice).engine === "piper" ? "Natural voice" : "Studio voice";
+    return studioVoice(voice).engine === "piper" ? "Lightweight voice" : "Studio voice";
   },
 };

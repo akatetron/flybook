@@ -142,10 +142,10 @@ export function VoiceSheet({ open, onClose, settings, onChange, onBeforePreview 
     <Sheet title="Voice" open={open} onClose={onClose}>
       <div className="segmented" role="tablist">
         <button role="tab" aria-selected={tab === "studio"} className={tab === "studio" ? "on" : ""} onClick={() => setTab("studio")}>
-          Natural &amp; studio
+          Lightweight &amp; studio
         </button>
         <button role="tab" aria-selected={tab === "system"} className={tab === "system" ? "on" : ""} onClick={() => setTab("system")}>
-          {phone ? "Phone voices" : "System voices"}
+          Instant voices
         </button>
       </div>
 
@@ -153,7 +153,7 @@ export function VoiceSheet({ open, onClose, settings, onChange, onBeforePreview 
         <>
           {settings.engine === "studio" && <ModelDownloadCard voice={settings.studioVoice} />}
           <p className="voice-group">
-            Natural voices <span className="tag">{phone ? "Recommended on this phone" : "Fast"}</span>
+            Lightweight voices <span className="tag">{phone ? "Recommended on this phone" : "Fast"}</span>
           </p>
           <p className="muted small hint">
             Made on your device, faster than real time even on phones. About 60 MB per voice, downloaded once.
@@ -169,11 +169,11 @@ export function VoiceSheet({ open, onClose, settings, onChange, onBeforePreview 
           <ul className="voice-list">{studio.map(row)}</ul>
         </>
       ) : !systemSpeechSupported || englishFirst.length === 0 ? (
-        <p className="muted">This browser doesn't offer built-in voices. Use natural voices instead.</p>
+        <p className="muted">This browser doesn't offer built-in voices. Use a lightweight or studio voice instead.</p>
       ) : (
         <>
           <p className="muted small hint">
-            Instant, no download. Voices marked “Enhanced”, “Premium” or “Natural” sound best — on iPhone you can add
+            Built into your device: instant, no download. Voices marked “Enhanced”, “Premium” or “Natural” sound best — on iPhone you can add
             more in Settings → Accessibility → Spoken Content → Voices. Note: these stop when the screen locks.
           </p>
           <ul className="voice-list">

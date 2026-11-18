@@ -39,7 +39,7 @@ export function languageName(tag: string): string {
   }
 }
 
-// ---------- Studio and phone voices together ----------
+// ---------- Studio and instant (built-in) voices together ----------
 
 
 export interface Voice {

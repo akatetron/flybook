@@ -473,7 +473,7 @@ function ReaderView({
       <span className="status error">
         {state.error}{" "}
         <button className="link" onClick={usePhoneVoice}>
-          Use phone voice
+          Use an instant voice
         </button>
       </span>
     );
@@ -511,7 +511,7 @@ function ReaderView({
   const voiceLabel =
     settings.engine === "studio"
       ? studioVoice(narrator.chapterVoice(chapters[chapterIndex]?.start ?? 0)).name
-      : findSystemVoice(settings.systemVoice)?.name ?? "Phone voice";
+      : findSystemVoice(settings.systemVoice)?.name ?? "Instant voice";
 
   const chapterTitle = chapters[chapterIndex]?.title;
   const current = segments[index]?.t ?? "";
@@ -782,7 +782,7 @@ function ReaderView({
 
         <button className="voice-chip" onClick={() => setSheet("voice")}>
           <MicIcon width={15} height={15} /> {voiceLabel}
-          <span className="voice-kind">{settings.engine === "studio" ? tts.engineName(currentVoice) : "Phone voice"}</span>
+          <span className="voice-kind">{settings.engine === "studio" ? tts.engineName(currentVoice) : "Instant voice"}</span>
         </button>
       </footer>
 
@@ -817,7 +817,7 @@ function ReaderView({
             Download and play
           </button>
           <button className="btn" onClick={usePhoneVoice}>
-            Use my phone's voice instead
+            Use an instant voice instead
           </button>
         </div>
       </Sheet>
@@ -1073,7 +1073,7 @@ function ChapterRow({
               onChange={(e) => narrator.setChapterVoice(start, e.target.value)}
             >
               {(["piper", "kokoro"] as const).map((engine) => (
-                <optgroup key={engine} label={engine === "piper" ? "Natural (fast)" : "Studio (best on computers)"}>
+                <optgroup key={engine} label={engine === "piper" ? "Lightweight (fast)" : "Studio (most natural)"}>
                   {STUDIO_VOICES.filter((v) => v.engine === engine).map((v) => (
                     <option key={v.id} value={v.id}>
                       {v.name} ({v.gender === "Female" ? "F" : "M"}, {v.accent === "British" ? "UK" : "US"})

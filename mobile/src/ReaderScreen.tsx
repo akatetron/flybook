@@ -273,7 +273,7 @@ function VoiceSheet(props: { visible: boolean; current: Voice; onClose: () => vo
             <View style={{ gap: 8, marginVertical: 8 }}>
               <Text style={styles.small}>
                 A one-time download of about {Kokoro.MODEL_MB} MB. After that they work offline, and your books never leave the
-                phone. Preparing is slower than with phone voices, so FlyBook prepares ahead while you listen.
+                phone. Preparing is slower than with instant voices, so FlyBook prepares ahead while you listen.
               </Text>
               {progress === null ? (
                 <Pressable style={styles.download} onPress={download}>
@@ -291,7 +291,7 @@ function VoiceSheet(props: { visible: boolean; current: Voice; onClose: () => vo
           {installed && (
             <Text style={styles.small}>Studio voices use {formatBytes(Kokoro.installedBytes())} on this phone.</Text>
           )}
-          <Text style={styles.section}>Phone voices · instant</Text>
+          <Text style={styles.section}>Instant voices · built into your phone</Text>
           <Text style={styles.small}>
             Get better ones ("Enhanced" or "Premium") in your phone's settings, under Accessibility → Spoken Content (iPhone) or
             Text-to-speech (Android).
