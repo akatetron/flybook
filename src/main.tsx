@@ -9,8 +9,10 @@ import { models } from "./tts/modelStore";
 import { storage } from "./lib/storage";
 import { watchForUpdates } from "./lib/swUpdate";
 import { installGlobalHandlers } from "./lib/errors";
+import { trackStorageWrites, whenIdle } from "./lib/busy";
 
 installGlobalHandlers();
+trackStorageWrites();
 createRoot(document.getElementById("root")!).render(<App />);
 
 // Check which voice models are really stored (files, not flags) and how much
@@ -27,9 +29,17 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
       // The service worker adds the headers that enable multi-threaded voice
       // generation, but they only apply from the next page load. Reload once
       // on the very first visit; never again, even if the browser doesn't support it.
+      // Only when nothing is happening (no save, import, playback or typing), so
+      // the reload never loses anything; if the app never goes idle, the faster
+      // mode simply starts on the next visit.
       if (!window.crossOriginIsolated) {
         try {
           if (localStorage.getItem("flybook:coi-reload")) return;
+        } catch {
+          return;
+        }
+        await whenIdle(1000);
+        try {
           localStorage.setItem("flybook:coi-reload", "1");
         } catch {
           return;

@@ -13,6 +13,7 @@ import { deleteRange, loadClip, saveClip, savedLengths } from "../lib/audioStore
 import type { Clip } from "./kokoro";
 import { tts } from "./engines";
 import { findSystemVoice } from "./system";
+import { setBusy } from "../lib/busy";
 import { models } from "./modelStore";
 import { REMOVED_VOICES, migrateVoice, noteVoiceMigrated } from "./voices";
 import { referenceSections, stripCitations } from "../../shared/narration";
@@ -162,6 +163,7 @@ export class Narrator {
 
   private emit(patch: Partial<NarratorState>) {
     const prevIndex = this.state.index;
+    if (patch.playing !== undefined && patch.playing !== this.state.playing) setBusy(`playback:${this.opts.bookId}`, patch.playing);
     this.state = { ...this.state, ...patch };
     if (patch.index !== undefined && patch.index !== prevIndex) {
       this.opts.onPosition(patch.index);
@@ -357,6 +359,7 @@ export class Narrator {
   }
 
   destroy() {
+    setBusy(`playback:${this.opts.bookId}`, false);
     this.unsubscribeModels();
     // Preparation ends with the book; free the engines' memory.
     tts.unloadAll();

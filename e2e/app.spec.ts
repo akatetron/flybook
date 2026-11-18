@@ -128,6 +128,9 @@ test("a file that isn't a valid PDF shows a clear error", async ({ page }) => {
 });
 
 test("no horizontal scrolling on any main screen", async ({ page }) => {
+  // Let the one-time first-visit reload happen before hopping between screens.
+  await page.goto("./");
+  await page.waitForFunction(() => window.crossOriginIsolated, null, { timeout: 20_000 });
   for (const hash of ["", "#/study", "#/voices", "#/storage", "#/settings"]) {
     await page.goto(`./${hash}`);
     await page.waitForTimeout(300);

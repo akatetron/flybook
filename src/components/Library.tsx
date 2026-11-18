@@ -16,6 +16,7 @@ import { LockIcon, MoreIcon, OfflineIcon, PlayIcon, PlusIcon, WaveIcon } from ".
 import { WORDS_PER_MINUTE, formatDuration } from "../lib/format";
 import { SupportCard } from "./Support";
 import { describeError, isStorageError } from "../lib/errors";
+import { setBusy } from "../lib/busy";
 
 interface LibraryProps {
   onOpen: (id: string) => void;
@@ -104,6 +105,7 @@ export function Library({ onOpen }: LibraryProps) {
       return;
     }
     setImporting({ name: file.name, done: 0, total: 0 });
+    setBusy("import", true);
     try {
       // Loaded on demand so the library opens instantly.
       const { importPdf } = await import("../lib/pdf");
@@ -155,6 +157,7 @@ export function Library({ onOpen }: LibraryProps) {
               : message
       );
     } finally {
+      setBusy("import", false);
       setImporting(null);
       if (input.current) input.current.value = "";
     }
