@@ -132,7 +132,11 @@ Everything lives in your browser on this device:
 | Documents, reading positions, notes, original PDFs | IndexedDB `flybook` (versioned; upgrades keep your data) |
 | Prepared audio & voice previews | IndexedDB `flybook-audio-2` (oldest trimmed above ~600 MB) |
 | Voice models | Cache Storage — checked file by file at startup |
-| The app itself | Service worker cache, for offline use |
+| The app itself | Service worker cache (`flybook-app-<build>`, replaced on each deploy), for offline use |
+
+**Updates:** each deploy gets its own app cache. Content-hashed files load from the cache first; everything else
+(the page, manifest, icons) comes from the network first, so it is never stale. When a new version has downloaded,
+Flybook shows **“A new version is ready — Reload”** instead of switching mid-book.
 
 A voice counts as installed only if its files are actually present and intact — Flybook checks the files, not a
 remembered flag, and **Repair** re-downloads only damaged ones. Data normally survives refreshes and closing the

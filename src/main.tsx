@@ -3,6 +3,7 @@ import { App } from "./App";
 import "./styles.css";
 import { models } from "./tts/modelStore";
 import { storage } from "./lib/storage";
+import { watchForUpdates } from "./lib/swUpdate";
 
 createRoot(document.getElementById("root")!).render(<App />);
 
@@ -13,8 +14,9 @@ void storage.refresh();
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   navigator.serviceWorker
-    .register("./sw.js")
-    .then(async () => {
+    .register("./sw.js", { updateViaCache: "none" })
+    .then(async (reg) => {
+      watchForUpdates(reg);
       await navigator.serviceWorker.ready;
       // The service worker adds the headers that enable multi-threaded voice
       // generation, but they only apply from the next page load. Reload once

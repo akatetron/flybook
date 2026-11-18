@@ -8,6 +8,7 @@ import { StorageScreen } from "./components/StorageScreen";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { useSettings } from "./lib/settings";
 import { applyTheme } from "./lib/theme";
+import { UpdatePrompt } from "./components/UpdatePrompt";
 
 // Hash routing so the phone's back button/gesture works and the site can live
 // on any static host (GitHub Pages under /flybook/) without rewrite rules.
@@ -52,7 +53,9 @@ export function App() {
 
   if ("book" in route) {
     return (
-      <Reader
+      <>
+        <UpdatePrompt />
+        <Reader
         key={route.book}
         bookId={route.book}
         startAt={route.at}
@@ -60,11 +63,13 @@ export function App() {
         onSettings={updateSettings}
         onBack={back}
       />
+      </>
     );
   }
 
   return (
     <div className="shell">
+      <UpdatePrompt />
       <NavBar tab={route.tab} onChange={go} />
       <div className="shell-main">
         {route.tab === "library" && <Library onOpen={open} />}
