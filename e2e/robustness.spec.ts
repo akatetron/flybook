@@ -80,3 +80,18 @@ test("a voice whose model file never arrived is not reported as ready", async ({
   await row.getByRole("button", { name: "Repair" }).click();
   await expect(page.getByRole("status")).toContainText("No damaged files. The missing files download");
 });
+
+test("a listener whose voice was removed for licence reasons is moved to a licensed one and told once", async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("seeded")) {
+      sessionStorage.setItem("seeded", "1");
+      localStorage.setItem("flybook:settings", JSON.stringify({ engine: "studio", studioVoice: "piper:en_US-amy-medium" }));
+    }
+  });
+  await page.goto("./");
+  await expect(page.locator(".voice-notice")).toContainText("Amy → Kristin");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("flybook:settings")!).studioVoice)).toBe("piper:en_US-kristin-medium");
+  await page.locator(".voice-notice").getByRole("button", { name: "OK" }).click();
+  await page.reload();
+  await expect(page.locator(".voice-notice")).toHaveCount(0);
+});

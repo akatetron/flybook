@@ -4,7 +4,7 @@ import { ALL_VOICES, DEFAULT_PHONE_VOICE, REMOVED_VOICES, migrateVoice, offeredV
 
 test("non-commercial voices are gone from the catalogue", () => {
   for (const id of Object.keys(REMOVED_VOICES)) assert.ok(!ALL_VOICES.some((v) => v.id === id), id);
-  assert.ok(!ALL_VOICES.some((v) => /lessac|ryan/.test(v.id)));
+  assert.ok(!ALL_VOICES.some((v) => /lessac|ryan|amy|alan/.test(v.id)));
 });
 
 test("every voice records its licence and where it was checked", () => {
@@ -14,16 +14,16 @@ test("every voice records its licence and where it was checked", () => {
   }
 });
 
-test("a commercial build offers only voices verified for commercial use", () => {
-  const paid = offeredVoices(true);
-  assert.ok(paid.every((v) => v.license.commercial === "yes"));
-  assert.ok(!paid.some((v) => /amy|alan/.test(v.id)));
-  assert.ok(offeredVoices(false).length > paid.length);
+test("every voice offered is cleared for commercial use, in every build", () => {
+  assert.ok(ALL_VOICES.every((v) => v.license.commercial === "yes"));
+  assert.deepEqual(offeredVoices(true), offeredVoices(false));
 });
 
 test("saved choices of removed voices move to a licensed replacement", () => {
   assert.equal(migrateVoice("piper:en_US-lessac-medium"), "piper:en_US-kristin-medium");
   assert.equal(migrateVoice("piper:en_US-ryan-medium"), "piper:en_US-joe-medium");
+  assert.equal(migrateVoice("piper:en_US-amy-medium"), "piper:en_US-kristin-medium");
+  assert.equal(migrateVoice("piper:en_GB-alan-medium"), "piper:en_GB-northern_english_male-medium");
   assert.equal(migrateVoice("af_heart"), "af_heart");
   for (const { replacement } of Object.values(REMOVED_VOICES)) {
     assert.equal(ALL_VOICES.find((v) => v.id === replacement)?.license.commercial, "yes");

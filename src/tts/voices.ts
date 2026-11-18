@@ -50,12 +50,10 @@ export const COMMERCIAL_BUILD =
 
 /** Every voice Flybook knows about, with its licence (see docs/LICENSES.md). */
 export const ALL_VOICES: StudioVoice[] = [
-  piper("en_US-amy-medium", "Amy", "Female", "American", "Bright, friendly", { name: "Unclear — model card refers to the mimic3-voices repository, no licence found for this voice", commercial: "unclear" }, "en/en_US/amy/medium"),
   piper("en_US-kristin-medium", "Kristin", "Female", "American", "Gentle, warm", { name: "Public domain (LibriVox recordings)", commercial: "yes" }, "en/en_US/kristin/medium"),
   piper("en_GB-cori-medium", "Cori", "Female", "British", "Crisp, composed", { name: "CC BY 4.0 (Hi-Fi TTS dataset, NVIDIA)", commercial: "yes" }, "en/en_GB/cori/medium"),
   piper("en_GB-alba-medium", "Alba", "Female", "British", "Soft Scottish", { name: "CC BY 4.0 (University of Edinburgh dataset)", commercial: "yes" }, "en/en_GB/alba/medium"),
   piper("en_US-joe-medium", "Joe", "Male", "American", "Relaxed, even", { name: "CC0 (OHF-Voice datasets)", commercial: "yes" }, "en/en_US/joe/medium"),
-  piper("en_GB-alan-medium", "Alan", "Male", "British", "Classic, calm", { name: "Copyright Mycroft AI, all rights reserved — no licence granted", commercial: "unclear" }, "en/en_GB/alan/medium"),
   piper("en_GB-northern_english_male-medium", "Northern", "Male", "British", "Northern English", { name: "CC BY-SA 4.0 (OpenSLR 83)", commercial: "yes" }, "en/en_GB/northern_english_male/medium"),
   kokoro("af_heart", "Heart", "Female", "American", "Warm, most natural"),
   kokoro("af_bella", "Bella", "Female", "American", "Bright, expressive"),
@@ -77,12 +75,15 @@ export function offeredVoices(commercial: boolean): StudioVoice[] {
 export const STUDIO_VOICES: StudioVoice[] = offeredVoices(COMMERCIAL_BUILD);
 
 /**
- * Voices removed because their licences forbid commercial use, and the
- * closest licensed replacement. Saved choices are migrated (settings, books, chapters).
+ * Voices removed because their licences forbid (or don't clearly allow)
+ * commercial use, and the closest licensed replacement. Saved choices are migrated (settings, books, chapters).
  */
 export const REMOVED_VOICES: Record<string, { name: string; replacement: string }> = {
   "piper:en_US-lessac-medium": { name: "Lessac", replacement: "piper:en_US-kristin-medium" },
   "piper:en_US-ryan-medium": { name: "Ryan", replacement: "piper:en_US-joe-medium" },
+  // No licence that clearly allows commercial use (Amy) / "all rights reserved" (Alan).
+  "piper:en_US-amy-medium": { name: "Amy", replacement: "piper:en_US-kristin-medium" },
+  "piper:en_GB-alan-medium": { name: "Alan", replacement: "piper:en_GB-northern_english_male-medium" },
 };
 
 /** A removed voice's replacement, or the id unchanged. */
@@ -103,14 +104,21 @@ export function noteVoiceMigrated(from: string) {
   }
 }
 
-/** Names of replaced voices not yet told to the listener; clears the list. */
-export function takeVoiceNotice(): string[] {
+/** Names of replaced voices the listener hasn't acknowledged yet. */
+export function pendingVoiceNotice(): string[] {
   try {
-    const names: string[] = JSON.parse(localStorage.getItem(NOTICE_KEY) ?? "[]");
-    if (names.length) localStorage.setItem(NOTICE_KEY, "[]");
-    return names;
+    return JSON.parse(localStorage.getItem(NOTICE_KEY) ?? "[]");
   } catch {
     return [];
+  }
+}
+
+/** The listener has seen the notice (kept until then, so a reload can't lose it). */
+export function clearVoiceNotice() {
+  try {
+    localStorage.setItem(NOTICE_KEY, "[]");
+  } catch {
+    /* storage unavailable */
   }
 }
 

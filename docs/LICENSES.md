@@ -7,8 +7,9 @@ against each item's own source (linked). Re-check before every paid release: mod
 
 ## Voices
 
-The code that decides what is offered is `src/tts/voices.ts` (`ALL_VOICES`, `license.commercial`). A build made with
-`VITE_COMMERCIAL_BUILD=true` offers only voices marked **yes**.
+The code that decides what is offered is `src/tts/voices.ts` (`ALL_VOICES`, `license.commercial`). Every voice listed
+is cleared for commercial use. If a voice whose licence is unclear is ever added, mark it `"unclear"`: a build made
+with `VITE_COMMERCIAL_BUILD=true` won't offer it.
 
 ### Kokoro (studio voices)
 
@@ -27,15 +28,16 @@ Each Piper voice's licence comes from its training data, stated on its model car
 | Cori | `en_GB-cori-medium` | CC BY 4.0 (Hi-Fi TTS dataset, NVIDIA) | Yes, with attribution | [model card](https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_GB/cori/medium/MODEL_CARD) |
 | Alba | `en_GB-alba-medium` | CC BY 4.0 (University of Edinburgh) | Yes, with attribution | [model card](https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_GB/alba/medium/MODEL_CARD) |
 | Northern | `en_GB-northern_english_male-medium` | CC BY-SA 4.0 (OpenSLR 83) | Yes, with attribution; adaptations of the voice must stay CC BY-SA | [model card](https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_GB/northern_english_male/medium/MODEL_CARD) |
-| Amy | `en_US-amy-medium` | **Unclear** — the card says "see URL" and points to the mimic3-voices repository, which has no licence for this voice | **Not cleared** (hidden in commercial builds) | [model card](https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/amy/medium/MODEL_CARD) |
-| Alan | `en_GB-alan-medium` | **Copyright 2022 Mycroft AI, All Rights Reserved** — no licence granted | **Not cleared** (hidden in commercial builds) | [model card](https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_GB/alan/medium/MODEL_CARD), [dataset licence](https://github.com/MycroftAI/mimic3-voices/blob/master/voices/en_UK/apope_low/LICENSE) |
 
-**Removed** (licences forbid commercial use). Saved choices migrate automatically and the listener is told once:
+**Removed** (licences forbid, or don't clearly allow, commercial use). Saved choices migrate automatically and the
+listener is told once:
 
 | Voice | Licence | Replaced by |
 | --- | --- | --- |
 | Lessac (`en_US-lessac-medium`) | Blizzard Challenge 2013 research licence — non-commercial | Kristin |
 | Ryan (`en_US-ryan-medium`) | CC BY-NC-SA 4.0 — non-commercial | Joe |
+| Amy (`en_US-amy-medium`) | Unclear — the [model card](https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/amy/medium/MODEL_CARD) points to the mimic3-voices repository, which has no licence for this voice | Kristin |
+| Alan (`en_GB-alan-medium`) | "Copyright 2022 Mycroft AI, All Rights Reserved" ([dataset licence](https://github.com/MycroftAI/mimic3-voices/blob/master/voices/en_UK/apope_low/LICENSE)) — no licence granted | Northern |
 
 ### Built-in "instant" voices
 

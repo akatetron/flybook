@@ -105,7 +105,7 @@ spoken — your text and notes keep everything.
 | | Engine | Download | Best for |
 | --- | --- | --- | --- |
 | **Studio** — Heart, Bella, Nicole, Emma, Michael, Fenrir, Puck, George, Fable | Kokoro-82M | ~92 MB once, shared by all (≈326 MB GPU version on computers) | The most natural narration |
-| **Lightweight** — Kristin, Joe, Cori, Alba, Northern (+ Amy, Alan: licence not cleared for commercial use) | Piper | ~60 MB per voice | Older phones |
+| **Lightweight** — Kristin, Joe, Cori, Alba, Northern | Piper | ~60 MB per voice | Older phones |
 | **Instant** | Your browser | none | Immediate playback; can't be prepared ahead |
 
 ### Measured
@@ -219,7 +219,7 @@ contains no GPL code and is not covered by this licence.
 **each voice has its own licence**, shown in Voice Studio · espeak-ng (**GPL-3.0**), compiled into the `phonemizer`
 and `@diffusionstudio/piper-wasm` packages · ONNX Runtime Web (MIT) · pdf.js (Apache-2.0) · idb (ISC) · React (MIT).
 
-Every voice's licence and source, the voices removed for licence reasons (Lessac, Ryan), and what the GPL means for
+Every voice's licence and source, the voices removed for licence reasons (Lessac, Ryan, Amy, Alan), and what the GPL means for
 a paid version are in **[docs/LICENSES.md](docs/LICENSES.md)**.
 
 <div align="center"><sub>Built for listening, reading and thinking — privately.</sub></div>
