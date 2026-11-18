@@ -6,10 +6,14 @@ test("works when the browser refuses persistent storage", async ({ page }) => {
     Object.defineProperty(StorageManager.prototype, "persisted", { value: () => Promise.resolve(false) });
   });
   await page.goto("./");
+  // The first visit reloads once to turn on cross-origin isolation; wait for that.
+  await page.waitForFunction(() => navigator.serviceWorker?.controller !== null, null, { timeout: 15_000 });
+  await page.waitForLoadState("load");
   await page.getByRole("button", { name: /sample story/i }).click();
   await page.getByRole("tab", { name: "Read" }).click();
   await page.locator('.seg[data-i="2"]').click();
   await page.getByRole("button", { name: "Highlight Blue" }).click();
+  await expect(page.locator('.seg[data-i="2"]')).toHaveClass(/hl-blue/);
   await page.reload();
   await page.getByRole("tab", { name: "Read" }).click();
   await expect(page.locator('.seg[data-i="2"]')).toHaveClass(/hl-blue/);
